@@ -189,10 +189,24 @@ function startCalling() {
 
 function checkBingo(card, marked) {
   const c = card.map(row => row.map(cell => cell === 'FREE' ? 'FREE' : cell));
-  for (let r = 0; r < 5; r++) if (c[r].every(v => v === 'FREE' || marked.includes(v))) return true;
-  for (let col = 0; col < 5; col++) if ([0,1,2,3,4].every(r => c[r][col] === 'FREE' || marked.includes(c[r][col]))) return true;
+
+  // Check rows
+  for (let r = 0; r < 5; r++) {
+    if (c[r].every(v => v === 'FREE' || marked.includes(v))) return true;
+  }
+  // Check columns
+  for (let col = 0; col < 5; col++) {
+    if ([0,1,2,3,4].every(r => c[r][col] === 'FREE' || marked.includes(c[r][col]))) return true;
+  }
+  // Check main diagonal (top‑left to bottom‑right)
   if ([0,1,2,3,4].every(i => c[i][i] === 'FREE' || marked.includes(c[i][i]))) return true;
+  // Check anti‑diagonal (top‑right to bottom‑left)
   if ([0,1,2,3,4].every(i => c[i][4-i] === 'FREE' || marked.includes(c[i][4-i]))) return true;
+
+  // 🔲 Check four corners
+  const corners = [c[0][0], c[0][4], c[4][0], c[4][4]];
+  if (corners.every(v => v === 'FREE' || marked.includes(v))) return true;
+
   return false;
 }
 
@@ -305,7 +319,21 @@ io.on('connection', async (socket) => {
 
   // OPTIONAL: auto‑check bingo here, but the player has a separate “BINGO” button
 });
-  socket.on('claimBingo', () => {/*...unchanged...*/});
+  socket.on('claimBingo', () => {
+  // Game must be running
+  if (currentGame.status !== 'running') return;
+
+  // Find the player who pressed BINGO
+  const player = currentGame.players.find(p => p.telegramId === socket.userId);
+  if (!player) return;
+
+  // Check if the player has a valid bingo
+  if (checkBingo(player.card, player.markedNumbers)) {
+    endGame(socket.userId);               // 🎉 winner!
+  } else {
+    socket.emit('invalidBingo');          // ❌ not a valid bingo
+  }
+});
   socket.on('getBalance', async () => { const u = await loadUser(socket.userId, socket.username); socket.emit('balanceUpdate', u.balance); });
   socket.on('requestWithdraw', () => { socket.emit('withdrawRequested', 'Withdraw request sent.'); });
 });
