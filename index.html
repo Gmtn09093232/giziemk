@@ -33,7 +33,12 @@
     .grid-cell {
       background:#1b2a38; border-radius:8px; padding:12px 0; font-weight:bold; cursor:pointer;
     }
-    .grid-cell.selected { background:#f39c12; color:#000; }
+    .grid-cell.taken {
+      background:#7f2a2a; cursor:not-allowed; text-decoration:line-through;
+    }
+    .grid-cell.selected {
+      background:#f39c12; color:#000;
+    }
     .card-container table { border-collapse:collapse; margin:10px auto; }
     td {
       width:40px; height:40px; border:2px solid #2e3b4e; text-align:center;
@@ -89,7 +94,6 @@
     let lobbyTimerInterval = null;
     let selectedCardNumber = null;
 
-    // DOM elements
     const lobbyPage = document.getElementById('lobbyPage');
     const gamePage = document.getElementById('gamePage');
     const lobbyTimerEl = document.getElementById('lobbyTimer');
@@ -101,6 +105,9 @@
     const selectedNumberEl = document.getElementById('selectedNumber');
     const numberGrid = document.getElementById('numberGrid');
     const lobbyCardPreview = document.getElementById('lobbyCardPreview');
+
+    // Global set of taken numbers to grey out
+    let takenNumbers = new Set();
 
     // Render 5x5 card
     function renderCard(card, containerId, clickable = false) {
@@ -159,28 +166,40 @@
       }, 1000);
     }
 
-    // Build 10x10 grid of numbers 1-100
+    // Build 1-100 grid and apply taken styles
     function buildNumberGrid() {
       numberGrid.innerHTML = '';
       for (let i = 1; i <= 100; i++) {
         const cell = document.createElement('div');
         cell.className = 'grid-cell';
+        cell.dataset.number = i;
         cell.textContent = i;
-        cell.addEventListener('click', () => {
-          if (isGameActive) return;
-          selectedCardNumber = i;
-          // Highlight selection
-          document.querySelectorAll('.grid-cell').forEach(c => c.classList.remove('selected'));
-          cell.classList.add('selected');
-          selectedNumberEl.textContent = i;
-          // Send selection to server
-          socket.emit('selectCardNumber', i);
-        });
+
+        if (takenNumbers.has(i)) {
+          cell.classList.add('taken');
+        } else {
+          cell.addEventListener('click', () => {
+            if (isGameActive || takenNumbers.has(i)) return;
+            // Send selection to server
+            socket.emit('selectCardNumber', i);
+          });
+        }
         numberGrid.appendChild(cell);
+      }
+      // Highlight currently selected number (if any)
+      if (selectedCardNumber) {
+        const selectedCell = numberGrid.querySelector(`[data-number='${selectedCardNumber}']`);
+        if (selectedCell) selectedCell.classList.add('selected');
       }
     }
 
-    // Connect and authenticate
+    function updateGridWithTakenNumbers(numbers) {
+      takenNumbers = new Set(numbers);
+      // Rebuild the grid to reflect new taken statuses
+      buildNumberGrid();
+    }
+
+    // Connect & authenticate
     async function connect() {
       const initData = tg.initData;
       if (!initData) { alert('Open inside Telegram'); return; }
@@ -200,12 +219,22 @@
         socket.emit('joinLobby');
       });
 
-      socket.on('balanceUpdate', (bal) => {
+      // Balance
+      socket.on('balanceUpdate', bal => {
         lobbyBalanceEl.textContent = bal;
         gameBalanceEl.textContent = bal;
       });
 
-      socket.on('yourCard', (card) => {
+      // Lobby state (timer + taken numbers)
+      socket.on('lobbyState', (state) => {
+        showLobby(state.startsIn);
+        if (state.takenNumbers) {
+          updateGridWithTakenNumbers(state.takenNumbers);
+        }
+      });
+
+      // Card successfully assigned to you
+      socket.on('yourCard', card => {
         userCard = card;
         if (isGameActive) {
           renderCard(card, 'gameCard', true);
@@ -214,12 +243,23 @@
         }
       });
 
+      // A card number was taken by someone (broadcast)
+      socket.on('cardTaken', (data) => {
+        updateGridWithTakenNumbers(data.takenNumbers);
+        selectedCardNumber = null;
+        selectedNumberEl.textContent = '-';
+        // Clear my own card preview unless I was the one who took it
+        // (they'll get yourCard separately)
+      });
+
+      // Card selection failed (taken or no balance)
+      socket.on('cardSelectionFailed', msg => alert(msg));
+
+      // Players count
       socket.on('playersCount', count => playersCountEl.textContent = count);
-      socket.on('lobbyState', data => showLobby(data.startsIn));
-      socket.on('lobbyStarted', data => showLobby(data.startsIn));
 
+      // Game events
       socket.on('gameStarted', showGame);
-
       socket.on('numberCalled', data => {
         currentCallEl.textContent = data.number;
         calledListEl.textContent = 'Called: ' + (data.calledNumbers || []).join(', ');
@@ -231,21 +271,17 @@
         markedNumbers = numbers;
         if (isGameActive && userCard.length) renderCard(userCard, 'gameCard', true);
       });
-
       socket.on('gameEnded', data => {
         isGameActive = false;
         alert(data.winner ? '🎉 Winner: ' + data.winner : 'Game ended with no winner');
       });
       socket.on('invalidBingo', () => alert('❌ Not a valid bingo yet!'));
-      socket.on('errorMsg', msg => alert(msg));
-      socket.on('withdrawRequested', msg => alert(msg));
       socket.on('disconnect', () => console.log('Disconnected'));
     }
 
-    // Deposit / Withdraw buttons (UI only)
+    // Deposit / Withdraw
     document.getElementById('depositBtn').addEventListener('click', () => {
-      alert('To deposit, contact admin. Your balance will be updated after manual confirmation.');
-      // Optionally open a Telegram chat: tg.openTelegramLink('https://t.me/your_admin');
+      alert('To deposit, please contact the admin. Your balance will be updated manually.');
     });
     document.getElementById('withdrawBtn').addEventListener('click', () => {
       if (socket) socket.emit('requestWithdraw');
@@ -261,7 +297,7 @@
       if (socket) socket.emit('claimBingo');
     });
 
-    // Build number grid and authenticate
+    // Start everything
     buildNumberGrid();
     connect();
   </script>
