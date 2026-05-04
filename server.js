@@ -280,6 +280,17 @@ io.on('connection', async (socket) => {
   socket.on('requestWithdraw', () => { socket.emit('withdrawRequested', 'Withdraw request sent.'); });
 });
 
+// ---- Place this AFTER all your routes and the static file middleware ----
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err.message);
+  // Always reply with JSON, never HTML
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal server error'
+  });
+});
+
+
+
 // ------------------- Start first lobby -------------------
 resetGame();
 
