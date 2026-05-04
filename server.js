@@ -413,6 +413,11 @@ io.on('connection', async (socket) => {
 console.log('Starting first lobby...');
 resetGame();
 
+app.use((req, res) => {
+  console.log(`Unhandled ${req.method} ${req.path}`);
+  res.status(404).json({ error: 'Not found' });
+});
+
 // ------------------- Start server -------------------
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => console.log(`✅ Bingo server on port ${PORT}`));
