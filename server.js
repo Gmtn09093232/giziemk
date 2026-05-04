@@ -30,7 +30,7 @@ const sessionMiddleware = session({
 app.use(sessionMiddleware);
 io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname,'index.html')));
 
 // ===================== In‑memory user cache =====================
 const users = {};   // telegramId -> { id, username, balance }
