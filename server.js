@@ -274,7 +274,37 @@ io.on('connection', async (socket) => {
     socket.emit('yourCard', player.card);
   });
 
-  socket.on('markNumber', (number) => {/*...unchanged...*/});
+ socket.on('markNumber', (number) => {
+  // 1. Game must be running
+  if (currentGame.status !== 'running') return;
+
+  // 2. Find this player in the current game
+  const player = currentGame.players.find(p => p.telegramId === socket.userId);
+  if (!player) return;
+
+  // 3. Validate the number
+  const num = Number(number);
+  // - must be a valid integer 1‑75 (or 'FREE' special case, but FREE is not clickable)
+  if (number !== 'FREE' && (!Number.isInteger(num) || num < 1 || num > 75)) return;
+
+  // 4. Only allow marking if the number is actually on this player's card
+  const flatCard = player.card.flat();   // all cell values
+  if (!flatCard.includes(number)) return;
+
+  // 5. Only allow marking if the number has been CALLED (standard bingo rule)
+  if (!currentGame.calledNumbers.includes(num) && number !== 'FREE') return;
+
+  // 6. Don't mark the same number twice
+  if (player.markedNumbers.includes(number)) return;
+
+  // 7. Add the number to marked numbers
+  player.markedNumbers.push(number);
+
+  // 8. Send updated marked numbers ONLY to this player
+  socket.emit('markedNumbers', player.markedNumbers);
+
+  // OPTIONAL: auto‑check bingo here, but the player has a separate “BINGO” button
+});
   socket.on('claimBingo', () => {/*...unchanged...*/});
   socket.on('getBalance', async () => { const u = await loadUser(socket.userId, socket.username); socket.emit('balanceUpdate', u.balance); });
   socket.on('requestWithdraw', () => { socket.emit('withdrawRequested', 'Withdraw request sent.'); });
