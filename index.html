@@ -9,85 +9,40 @@
   <style>
     * { box-sizing:border-box; -webkit-user-select:none; user-select:none; }
     body {
-      margin:0;
-      font-family:system-ui;
-      background: radial-gradient(circle at top, #0d1b2a, #05080f);
-      color:#fff;
-      padding:15px;
+      margin:0; font-family:system-ui; background: radial-gradient(circle at top, #0d1b2a, #05080f);
+      color:#fff; padding:15px; text-align:center;
+    }
+    .page {
+      max-width: 450px; margin: auto; background:#111b27; padding:15px; border-radius:20px;
     }
     .hidden { display:none !important; }
-    .page {
-      background:#111b27;
-      padding:20px;
-      border-radius:20px;
-      max-width: 450px;
-      margin: auto;
-    }
     .balance-box {
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      background:#0a1620;
-      padding:12px;
-      border-radius:12px;
-      margin-bottom:15px;
+      display:flex; justify-content:space-between; align-items:center;
+      background:#0a1620; padding:12px; border-radius:12px; margin-bottom:15px;
     }
     button {
-      background:#f39c12;
-      color:#000;
-      border:none;
-      padding:12px 20px;
-      border-radius:12px;
-      font-weight:bold;
-      cursor:pointer;
+      background:#f39c12; color:#000; border:none; padding:10px 16px; border-radius:12px;
+      font-weight:bold; cursor:pointer; margin:4px;
     }
     button:active { opacity:0.8; }
-    .timer {
-      font-size:24px;
-      font-weight:bold;
-      margin:10px 0;
-    }
-    .card-container {
+    .timer { font-size:24px; font-weight:bold; margin:10px 0; }
+    .grid-100 {
+      display: grid; grid-template-columns: repeat(10, 1fr); gap:6px;
       margin: 20px 0;
     }
-    table {
-      border-collapse: collapse;
-      margin: auto;
+    .grid-cell {
+      background:#1b2a38; border-radius:8px; padding:12px 0; font-weight:bold; cursor:pointer;
     }
+    .grid-cell.selected { background:#f39c12; color:#000; }
+    .card-container table { border-collapse:collapse; margin:10px auto; }
     td {
-      width: 45px;
-      height: 45px;
-      border: 2px solid #2e3b4e;
-      text-align: center;
-      vertical-align: middle;
-      font-weight: bold;
-      cursor: default;
-      background: #1b2a38;
+      width:40px; height:40px; border:2px solid #2e3b4e; text-align:center;
+      vertical-align:middle; background:#1b2a38; font-weight:bold;
     }
-    td.marked {
-      background: #ffd966;
-      color: #000;
-    }
-    td.free {
-      background: #3a4a5a;
-      font-style: italic;
-    }
-    #calledList {
-      max-height: 80px;
-      overflow-y: auto;
-      margin: 10px 0;
-      font-size: 14px;
-      color:#aaa;
-    }
-    #currentCall {
-      font-size: 40px;
-      margin: 10px 0;
-      font-weight: bold;
-    }
-    .status-msg {
-      color:#ffd966;
-      font-weight:bold;
-    }
+    td.marked { background:#ffd966; color:#000; }
+    td.free { background:#3a4a5a; font-style:italic; }
+    #calledList { max-height:80px; overflow-y:auto; margin:10px 0; font-size:14px; color:#aaa; }
+    #currentCall { font-size:40px; margin:10px 0; font-weight:bold; }
   </style>
 </head>
 <body>
@@ -96,11 +51,18 @@
     <h2>🎰 Bingo Lobby</h2>
     <div class="balance-box">
       <span>💰 Balance: <b id="lobbyBalance">0</b></span>
+      <div>
+        <button id="depositBtn">+ Deposit</button>
+        <button id="withdrawBtn">- Withdraw</button>
+      </div>
     </div>
     <p class="timer" id="lobbyTimer">30s</p>
-    <div class="card-container" id="lobbyCard"></div>
-    <button id="newCardBtn">🔄 New Card</button>
+    <p>Pick your Bingo card number:</p>
+    <div id="numberGrid" class="grid-100"></div>
+    <p>Selected number: <span id="selectedNumber">-</span></p>
+    <button id="randomCardBtn">🎲 Random Card</button>
     <p>👥 Players: <span id="playersCount">0</span></p>
+    <div id="lobbyCardPreview" class="card-container"></div>
   </div>
 
   <!-- GAME PAGE -->
@@ -116,22 +78,18 @@
   </div>
 
   <script>
-    // =====================
-    // Telegram WebApp
-    // =====================
     const tg = window.Telegram.WebApp;
     tg.ready();
     tg.expand();
 
-    // =====================
-    // Global state
-    // =====================
     let socket;
     let userCard = [];
     let markedNumbers = [];
     let isGameActive = false;
     let lobbyTimerInterval = null;
+    let selectedCardNumber = null;
 
+    // DOM elements
     const lobbyPage = document.getElementById('lobbyPage');
     const gamePage = document.getElementById('gamePage');
     const lobbyTimerEl = document.getElementById('lobbyTimer');
@@ -140,10 +98,11 @@
     const gameBalanceEl = document.getElementById('gameBalance');
     const currentCallEl = document.getElementById('currentCall');
     const calledListEl = document.getElementById('calledList');
+    const selectedNumberEl = document.getElementById('selectedNumber');
+    const numberGrid = document.getElementById('numberGrid');
+    const lobbyCardPreview = document.getElementById('lobbyCardPreview');
 
-    // =====================
     // Render 5x5 card
-    // =====================
     function renderCard(card, containerId, clickable = false) {
       const container = document.getElementById(containerId);
       container.innerHTML = '';
@@ -154,12 +113,8 @@
           const td = document.createElement('td');
           const value = card[r][c];
           td.textContent = value;
-          if (value === 'FREE') {
-            td.classList.add('free');
-          }
-          if (markedNumbers.includes(value)) {
-            td.classList.add('marked');
-          }
+          if (value === 'FREE') td.classList.add('free');
+          if (markedNumbers.includes(value)) td.classList.add('marked');
           if (clickable && value !== 'FREE') {
             td.style.cursor = 'pointer';
             td.addEventListener('click', () => {
@@ -174,17 +129,14 @@
       container.appendChild(table);
     }
 
-    // =====================
     // Switch pages
-    // =====================
     function showLobby(timeLeft) {
       lobbyPage.classList.remove('hidden');
       gamePage.classList.add('hidden');
       isGameActive = false;
-      startLobbyTimer(timeLeft);
+      startTimer(timeLeft);
       socket.emit('getBalance');
     }
-
     function showGame() {
       lobbyPage.classList.add('hidden');
       gamePage.classList.remove('hidden');
@@ -192,11 +144,10 @@
       clearInterval(lobbyTimerInterval);
       socket.emit('getBalance');
     }
-
-    function startLobbyTimer(seconds) {
+    function startTimer(seconds) {
       let left = seconds || 0;
       lobbyTimerEl.textContent = left + 's';
-      if (lobbyTimerInterval) clearInterval(lobbyTimerInterval);
+      clearInterval(lobbyTimerInterval);
       lobbyTimerInterval = setInterval(() => {
         left--;
         if (left <= 0) {
@@ -208,16 +159,31 @@
       }, 1000);
     }
 
-    // =====================
-    // Socket.IO connection
-    // =====================
-    async function connect() {
-      // Authenticate via Telegram
-      const initData = tg.initData;
-      if (!initData) {
-        alert('Open inside Telegram Mini App');
-        return;
+    // Build 10x10 grid of numbers 1-100
+    function buildNumberGrid() {
+      numberGrid.innerHTML = '';
+      for (let i = 1; i <= 100; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'grid-cell';
+        cell.textContent = i;
+        cell.addEventListener('click', () => {
+          if (isGameActive) return;
+          selectedCardNumber = i;
+          // Highlight selection
+          document.querySelectorAll('.grid-cell').forEach(c => c.classList.remove('selected'));
+          cell.classList.add('selected');
+          selectedNumberEl.textContent = i;
+          // Send selection to server
+          socket.emit('selectCardNumber', i);
+        });
+        numberGrid.appendChild(cell);
       }
+    }
+
+    // Connect and authenticate
+    async function connect() {
+      const initData = tg.initData;
+      if (!initData) { alert('Open inside Telegram'); return; }
 
       const res = await fetch('/api/telegram-miniapp-auth', {
         method: 'POST',
@@ -225,17 +191,13 @@
         body: JSON.stringify({ initData })
       });
       const data = await res.json();
-      if (!data.success) {
-        alert('Auth failed');
-        return;
-      }
+      if (!data.success) { alert('Auth failed'); return; }
 
-      // Now connect to Socket.IO
       socket = io();
 
       socket.on('connect', () => {
-        console.log('Socket connected');
-        socket.emit('joinLobby');  // auto‑join the current lobby
+        console.log('Connected');
+        socket.emit('joinLobby');
       });
 
       socket.on('balanceUpdate', (bal) => {
@@ -243,90 +205,64 @@
         gameBalanceEl.textContent = bal;
       });
 
-      // Lobby events
       socket.on('yourCard', (card) => {
         userCard = card;
         if (isGameActive) {
           renderCard(card, 'gameCard', true);
         } else {
-          renderCard(card, 'lobbyCard');
+          renderCard(card, 'lobbyCardPreview');
         }
       });
 
-      socket.on('playersCount', (count) => {
-        playersCountEl.textContent = count;
-      });
+      socket.on('playersCount', count => playersCountEl.textContent = count);
+      socket.on('lobbyState', data => showLobby(data.startsIn));
+      socket.on('lobbyStarted', data => showLobby(data.startsIn));
 
-      socket.on('lobbyState', (data) => {
-        showLobby(data.startsIn);
-      });
+      socket.on('gameStarted', showGame);
 
-      socket.on('lobbyStarted', (data) => {
-        showLobby(data.startsIn);
-      });
-
-      // Game events
-      socket.on('gameStarted', () => {
-        showGame();
-      });
-
-      socket.on('numberCalled', (data) => {
+      socket.on('numberCalled', data => {
         currentCallEl.textContent = data.number;
         calledListEl.textContent = 'Called: ' + (data.calledNumbers || []).join(', ');
       });
-
-      socket.on('calledNumbers', (called) => {
+      socket.on('calledNumbers', called => {
         calledListEl.textContent = 'Called: ' + called.join(', ');
       });
-
-      socket.on('markedNumbers', (numbers) => {
+      socket.on('markedNumbers', numbers => {
         markedNumbers = numbers;
-        if (isGameActive && userCard.length) {
-          renderCard(userCard, 'gameCard', true);
-        }
+        if (isGameActive && userCard.length) renderCard(userCard, 'gameCard', true);
       });
 
-      socket.on('gameEnded', (data) => {
+      socket.on('gameEnded', data => {
         isGameActive = false;
-        if (data.winner) {
-          alert('🎉 Winner: ' + data.winner);
-        } else {
-          alert('Game ended with no winner');
-        }
-        // Server will auto‑switch to lobby after a few seconds
+        alert(data.winner ? '🎉 Winner: ' + data.winner : 'Game ended with no winner');
       });
-
-      socket.on('invalidBingo', () => {
-        alert('❌ Not a valid bingo yet!');
-      });
-
-      socket.on('errorMsg', (msg) => {
-        alert(msg);
-      });
-
-      socket.on('disconnect', () => {
-        console.log('Socket disconnected');
-      });
+      socket.on('invalidBingo', () => alert('❌ Not a valid bingo yet!'));
+      socket.on('errorMsg', msg => alert(msg));
+      socket.on('withdrawRequested', msg => alert(msg));
+      socket.on('disconnect', () => console.log('Disconnected'));
     }
 
-    // =====================
-    // Button handlers
-    // =====================
-    document.getElementById('newCardBtn').addEventListener('click', () => {
-      if (!isGameActive && socket) {
-        socket.emit('newCard');
-      }
+    // Deposit / Withdraw buttons (UI only)
+    document.getElementById('depositBtn').addEventListener('click', () => {
+      alert('To deposit, contact admin. Your balance will be updated after manual confirmation.');
+      // Optionally open a Telegram chat: tg.openTelegramLink('https://t.me/your_admin');
+    });
+    document.getElementById('withdrawBtn').addEventListener('click', () => {
+      if (socket) socket.emit('requestWithdraw');
+      else alert('Not connected');
+    });
+
+    document.getElementById('randomCardBtn').addEventListener('click', () => {
+      if (isGameActive || !socket) return;
+      socket.emit('newCardNumber');
     });
 
     document.getElementById('bingoBtn').addEventListener('click', () => {
-      if (socket) {
-        socket.emit('claimBingo');
-      }
+      if (socket) socket.emit('claimBingo');
     });
 
-    // =====================
-    // Start everything
-    // =====================
+    // Build number grid and authenticate
+    buildNumberGrid();
     connect();
   </script>
 </body>
