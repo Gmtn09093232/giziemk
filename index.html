@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Telegram Bingo</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body { font-family: Arial; margin: 0; padding: 10px; background: #1e1e1e; color: white; text-align: center; }
+    button { background: #2481cc; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 16px; }
+    .hidden { display: none !important; }
+    #lobbyPage, #gamePage { max-width: 400px; margin: auto; }
+    .card { display: inline-block; margin: 10px 0; }
+    .card table { border-collapse: collapse; margin: auto; }
+    .card td { width: 40px; height: 40px; border: 2px solid #555; text-align: center; vertical-align: middle; font-size: 14px; cursor: default; }
+    .card td.marked { background: #ffd700; color: black; }
+    .card td.free { background: #444; font-weight: bold; }
+    .called-numbers { max-height: 100px; overflow-y: auto; margin: 10px 0; }
+    .timer { font-size: 24px; margin: 10px 0; }
+    .balance { font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div id="lobbyPage">
+    <h2>Lobby</h2>
+    <p>Balance: <span id="balanceLobby" class="balance">0</span> coins</p>
+    <p class="timer" id="lobbyTimer">30s</p>
+    <div id="lobbyCard" class="card"></div>
+    <button id="newCardBtn">New Card</button>
+    <p id="playersCount">Players: 0</p>
+  </div>
+
+  <div id="gamePage" class="hidden">
+    <h2>Game</h2>
+    <p>Balance: <span id="balanceGame" class="balance">0</span> coins</p>
+    <div id="currentCall" style="font-size: 32px; margin: 10px;">-</div>
+    <div id="gameCard" class="card"></div>
+    <div class="called-numbers" id="calledList">Called: </div>
+    <button id="bingoBtn">BINGO!</button>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    const socket = io({
+      query: { initData: tg.initData }
+    });
+
+    let userCard = [];
+    let markedNumbers = [];
+    let lobbyInterval, gameTimer;
+    let isGameActive = false;
+
+    function renderCard(card, containerId, clickable = false) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      const table = document.createElement('table');
+      card.forEach((row, r) => {
+        const tr = document.createElement('tr');
+        row.forEach((cell, c) => {
+          const td = document.createElement('td');
+          td.textContent = cell === 'FREE' ? 'FREE' : cell;
+          if (cell === 'FREE') td.classList.add('free');
+          if (markedNumbers.includes(cell)) td.classList.add('marked');
+          if (clickable && cell !== 'FREE') {
+            td.style.cursor = 'pointer';
+            td.addEventListener('click', () => {
+              if (!isGameActive) return;
+              socket.emit('markNumber', cell);
+            });
+          }
+          tr.appendChild(td);
+        });
+        table.appendChild(tr);
+      });
+      container.appendChild(table);
+    }
+
+    function switchToLobby(timeLeft) {
+      document.getElementById('lobbyPage').classList.remove('hidden');
+      document.getElementById('gamePage').classList.add('hidden');
+      isGameActive = false;
+      updateLobbyTimer(timeLeft);
+      socket.emit('getBalance');
+    }
+
+    function switchToGame() {
+      document.getElementById('lobbyPage').classList.add('hidden');
+      document.getElementById('gamePage').classList.remove('hidden');
+      isGameActive = true;
+      socket.emit('getBalance');
+    }
+
+    function updateLobbyTimer(seconds) {
+      let timeLeft = seconds || 0;
+      document.getElementById('lobbyTimer').textContent = timeLeft + 's';
+      if (lobbyInterval) clearInterval(lobbyInterval);
+      lobbyInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById('lobbyTimer').textContent = timeLeft + 's';
+        if (timeLeft <= 0) {
+          clearInterval(lobbyInterval);
+          switchToGame();
+        }
+      }, 1000);
+    }
+
+    socket.on('lobbyState', (data) => {
+      switchToLobby(data.startsIn);
+      socket.emit('getBalance');
+    });
+
+    socket.on('lobbyStarted', (data) => {
+      switchToLobby(data.startsIn);
+    });
+
+    socket.on('yourCard', (card) => {
+      userCard = card;
+      if (isGameActive) {
+        renderCard(card, 'gameCard', true);
+      } else {
+        renderCard(card, 'lobbyCard');
+      }
+    });
+
+    socket.on('markedNumbers', (numbers) => {
+      markedNumbers = numbers;
+      if (isGameActive && userCard.length) {
+        renderCard(userCard, 'gameCard', true);
+      }
+    });
+
+    socket.on('calledNumbers', (called) => {
+      updateCalledList(called);
+    });
+
+    socket.on('numberCalled', (data) => {
+      document.getElementById('currentCall').textContent = data.number;
+      updateCalledList(data.calledNumbers);
+    });
+
+    function updateCalledList(calledArr) {
+      document.getElementById('calledList').textContent = 'Called: ' + (calledArr || []).join(', ');
+    }
+
+    socket.on('gameStarted', () => {
+      switchToGame();
+      socket.emit('getBalance');
+    });
+
+    socket.on('gameEnded', (data) => {
+      isGameActive = false;
+      if (data.winner) {
+        alert('Winner: ' + data.winner.username);
+      } else {
+        alert('Game ended with no winner');
+      }
+      socket.emit('getBalance');
+    });
+
+    socket.on('invalidBingo', () => {
+      alert('Not a valid bingo yet!');
+    });
+
+    socket.on('balance', (bal) => {
+      document.getElementById('balanceLobby').textContent = bal;
+      document.getElementById('balanceGame').textContent = bal;
+    });
+
+    socket.on('playersCount', (count) => {
+      document.getElementById('playersCount').textContent = 'Players: ' + count;
+    });
+
+    document.getElementById('newCardBtn').addEventListener('click', () => {
+      if (!isGameActive) socket.emit('newCard');
+    });
+
+    document.getElementById('bingoBtn').addEventListener('click', () => {
+      socket.emit('claimBingo');
+    });
+
+    socket.emit('getBalance');
+  </script>
+</body>
+</html>
