@@ -9,10 +9,17 @@ const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
 
 // ------------------- Supabase -------------------
+console.log('Connecting to Supabase...');
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+// Quick DB test
+(async () => {
+  const { error } = await supabase.from('users').select('count', { count: 'exact', head: true });
+  if (error) console.error('❌ Supabase connection error:', error.message);
+  else console.log('✅ Supabase connected');
+})();
 
 // ------------------- App -------------------
 const app = express();
@@ -28,28 +35,39 @@ const sessionMiddleware = session({
   cookie: { secure: false }
 });
 app.use(sessionMiddleware);
-io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
+io.use((socket, next) => {
+  // Manually wrap to ensure session is loaded
+  sessionMiddleware(socket.request, {}, next);
+});
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname,'index.html')));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 // ------------------- User cache -------------------
-const users = {};               // telegramId -> { id, username, balance }
+const users = {};
 
 async function loadUser(telegramId, username) {
   const id = String(telegramId);
   if (users[id]) return users[id];
 
-  const { data } = await supabase
+  console.log(`Loading user ${id} from DB...`);
+  const { data, error } = await supabase
     .from('users')
     .select('*')
     .eq('telegram_id', id)
     .maybeSingle();
 
+  if (error) {
+    console.error('DB error loading user:', error);
+  }
+
   if (data) {
     users[id] = { id, username: data.username, balance: Number(data.balance) };
+    console.log('User found in DB:', users[id]);
   } else {
     const newUser = { telegram_id: id, username: username || 'Player', balance: 1000 };
-    await supabase.from('users').insert(newUser);
+    const { error: insertError } = await supabase.from('users').insert(newUser);
+    if (insertError) console.error('Insert error:', insertError);
+    else console.log('New user created in DB');
     users[id] = { id, username: newUser.username, balance: 1000 };
   }
   return users[id];
@@ -66,19 +84,37 @@ function verifyTelegram(initData) {
     .join('\n');
   const secretKey = crypto.createHmac('sha256', 'WebAppData').update(process.env.TELEGRAM_BOT_TOKEN).digest();
   const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-  return calculatedHash === hash;
+  const ok = calculatedHash === hash;
+  console.log('Telegram verify:', ok);
+  return ok;
 }
 
 // ------------------- Auth endpoint -------------------
 app.post('/api/telegram-miniapp-auth', async (req, res) => {
+  console.log('Auth request received');
   const { initData } = req.body;
-  if (!initData || !verifyTelegram(initData)) return res.status(403).json({ success: false });
+  if (!initData) {
+    console.log('No initData');
+    return res.status(400).json({ success: false, error: 'Missing initData' });
+  }
+
+  if (!verifyTelegram(initData)) {
+    console.log('Invalid Telegram data');
+    return res.status(403).json({ success: false, error: 'Invalid Telegram data' });
+  }
 
   const params = new URLSearchParams(initData);
   const userData = JSON.parse(params.get('user'));
   const id = String(userData.id);
+  console.log('Authenticating user:', id);
+
   const user = await loadUser(id, userData.first_name || userData.username);
   req.session.userId = id;
+  // Force session save
+  req.session.save(err => {
+    if (err) console.error('Session save error:', err);
+    else console.log('Session saved for', id);
+  });
 
   res.json({ success: true, userId: id, username: user.username, balance: user.balance });
 });
@@ -93,6 +129,7 @@ app.post('/admin/add-balance', async (req, res) => {
   const user = await loadUser(strId, 'unknown');
   user.balance += amt;
   await supabase.from('users').update({ balance: user.balance }).eq('telegram_id', strId);
+  // Notify if online
   const sockets = await io.fetchSockets();
   const playerSocket = sockets.find(s => s.userId === strId);
   if (playerSocket) playerSocket.emit('balanceUpdate', user.balance);
@@ -122,7 +159,6 @@ function generateCard() {
     }
     card.push(colNumbers);
   }
-  // transpose
   const transposed = [];
   for (let r = 0; r < 5; r++) {
     transposed.push([card[0][r], card[1][r], card[2][r], card[3][r], card[4][r]]);
@@ -130,11 +166,11 @@ function generateCard() {
   return transposed;
 }
 
-// ------------------- Game state (multiplayer) -------------------
+// ------------------- Game state -------------------
 const currentGame = {
   status: 'lobby',
-  players: [],                // { telegramId, username, card, markedNumbers, cardNumber }
-  takenCardNumbers: new Set(), // numbers 1-100 that are already picked
+  players: [],
+  takenCardNumbers: new Set(),
   calledNumbers: [],
   entryFee: 10,
   prizePool: 0,
@@ -154,6 +190,7 @@ function resetGame() {
   currentGame.prizePool = 0;
   currentGame.lobbyEndTime = Date.now() + 30000;
   currentGame.cardSet = Array.from({ length: 100 }, () => generateCard());
+  console.log('Lobby reset, emitting lobbyState');
   io.emit('lobbyState', { startsIn: 30, takenNumbers: [] });
   currentGame.lobbyTimer = setTimeout(() => startGame(), 30000);
 }
@@ -164,7 +201,6 @@ function startGame() {
     setTimeout(resetGame, 3000);
     return;
   }
-
   for (const p of currentGame.players) {
     const user = users[p.telegramId];
     if (user) {
@@ -172,10 +208,10 @@ function startGame() {
       supabase.from('users').update({ balance: user.balance }).eq('telegram_id', p.telegramId).then();
     }
   }
-
   currentGame.prizePool = currentGame.entryFee * currentGame.players.length;
   currentGame.status = 'running';
   currentGame.calledNumbers = [];
+  console.log('Game started, players:', currentGame.players.length);
   io.emit('gameStarted');
   startCalling();
 }
@@ -221,24 +257,30 @@ function endGame(winnerTelegramId) {
   } else {
     io.emit('gameEnded', { noWinner: true });
   }
+  console.log('Game ended');
   setTimeout(resetGame, 5000);
 }
 
 // ------------------- Socket.IO auth -------------------
 io.use((socket, next) => {
-  const s = socket.request.session;
-  if (!s?.userId) return next(new Error('Unauthorized'));
-  socket.userId = s.userId;
-  socket.username = users[s.userId]?.username || 'Player';
+  const req = socket.request;
+  console.log('Socket handshake - session:', req.session);
+  if (!req.session?.userId) {
+    console.log('Socket auth failed: no session userId');
+    return next(new Error('Unauthorized'));
+  }
+  socket.userId = req.session.userId;
+  socket.username = users[socket.userId]?.username || 'Player';
+  console.log('Socket authenticated for', socket.userId);
   next();
 });
 
 // ------------------- Socket events -------------------
 io.on('connection', async (socket) => {
+  console.log('Socket connected:', socket.userId);
   const user = users[socket.userId];
   socket.emit('balanceUpdate', user ? user.balance : 0);
 
-  // Send current lobby/game state and taken numbers
   if (currentGame.status === 'lobby') {
     const timeLeft = Math.max(0, Math.ceil((currentGame.lobbyEndTime - Date.now()) / 1000));
     socket.emit('lobbyState', {
@@ -255,32 +297,25 @@ io.on('connection', async (socket) => {
     }
   }
 
-  // ---------- Lobby ----------
   socket.on('joinLobby', () => {
-    // Just a place‑holder, actual joining happens on card selection
+    console.log('joinLobby from', socket.userId);
   });
 
-  // Select a card number (1‑100) – only if not taken
   socket.on('selectCardNumber', (cardNumber) => {
-    if (currentGame.status !== 'lobby') return;
+    console.log(`selectCardNumber ${cardNumber} from ${socket.userId}`);
+    if (currentGame.status !== 'lobby') { console.log('Not in lobby'); return; }
     const num = Number(cardNumber);
-    if (!Number.isInteger(num) || num < 1 || num > 100) return;
-
-    // Check if already taken
+    if (!Number.isInteger(num) || num < 1 || num > 100) { console.log('Invalid number'); return; }
     if (currentGame.takenCardNumbers.has(num)) {
+      console.log('Number taken');
       socket.emit('cardSelectionFailed', 'This number is already taken.');
       return;
     }
-
-    // Remove any previous selection by this player
     const existingPlayer = currentGame.players.find(p => p.telegramId === socket.userId);
     if (existingPlayer) {
       currentGame.takenCardNumbers.delete(existingPlayer.cardNumber);
-      // Remove player from list, will re‑add
       currentGame.players = currentGame.players.filter(p => p.telegramId !== socket.userId);
     }
-
-    // Claim the number
     currentGame.takenCardNumbers.add(num);
     const player = {
       telegramId: socket.userId,
@@ -290,21 +325,19 @@ io.on('connection', async (socket) => {
       cardNumber: num
     };
     currentGame.players.push(player);
-
-    // Notify all clients about the taken number
+    console.log(`Player added, total players: ${currentGame.players.length}`);
     io.emit('cardTaken', {
       number: num,
       takenNumbers: Array.from(currentGame.takenCardNumbers)
     });
     io.emit('playersCount', currentGame.players.length);
-
     socket.emit('yourCard', player.card);
   });
 
-  // Random card button – server picks an available number
+  // Random card button
   socket.on('newCardNumber', () => {
+    console.log('newCardNumber request');
     if (currentGame.status !== 'lobby') return;
-    // Find a free number
     const freeNumbers = [];
     for (let i = 1; i <= 100; i++) {
       if (!currentGame.takenCardNumbers.has(i)) freeNumbers.push(i);
@@ -314,13 +347,11 @@ io.on('connection', async (socket) => {
       return;
     }
     const randomNum = freeNumbers[Math.floor(Math.random() * freeNumbers.length)];
-    // Remove previous selection
     const existingPlayer = currentGame.players.find(p => p.telegramId === socket.userId);
     if (existingPlayer) {
       currentGame.takenCardNumbers.delete(existingPlayer.cardNumber);
       currentGame.players = currentGame.players.filter(p => p.telegramId !== socket.userId);
     }
-
     currentGame.takenCardNumbers.add(randomNum);
     const player = {
       telegramId: socket.userId,
@@ -330,17 +361,15 @@ io.on('connection', async (socket) => {
       cardNumber: randomNum
     };
     currentGame.players.push(player);
-
     io.emit('cardTaken', {
       number: randomNum,
       takenNumbers: Array.from(currentGame.takenCardNumbers)
     });
     io.emit('playersCount', currentGame.players.length);
-
     socket.emit('yourCard', player.card);
   });
 
-  // ---------- Game ----------
+  // Game events
   socket.on('markNumber', (number) => {
     if (currentGame.status !== 'running') return;
     if (!currentGame.calledNumbers.includes(number)) return;
@@ -365,26 +394,25 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Balance refresh
   socket.on('getBalance', async () => {
     const u = await loadUser(socket.userId, socket.username);
     socket.emit('balanceUpdate', u.balance);
   });
 
-  // Withdraw request (logged)
   socket.on('requestWithdraw', () => {
-    console.log(`Withdraw request from ${socket.userId} (${socket.username})`);
+    console.log(`Withdraw request from ${socket.userId}`);
     socket.emit('withdrawRequested', 'Your withdraw request has been sent to admin.');
   });
 
   socket.on('disconnect', () => {
-    // Optional: remove player from lobby? We'll handle that when they reconnect or at game start.
+    console.log('Socket disconnected:', socket.userId);
   });
 });
 
 // Start first lobby
+console.log('Starting first lobby...');
 resetGame();
 
 // ------------------- Start server -------------------
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`✅ Bingo server on port ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`✅ Bingo server on port ${PORT}`));

@@ -106,10 +106,8 @@
     const numberGrid = document.getElementById('numberGrid');
     const lobbyCardPreview = document.getElementById('lobbyCardPreview');
 
-    // Global set of taken numbers to grey out
     let takenNumbers = new Set();
 
-    // Render 5x5 card
     function renderCard(card, containerId, clickable = false) {
       const container = document.getElementById(containerId);
       container.innerHTML = '';
@@ -136,20 +134,19 @@
       container.appendChild(table);
     }
 
-    // Switch pages
     function showLobby(timeLeft) {
       lobbyPage.classList.remove('hidden');
       gamePage.classList.add('hidden');
       isGameActive = false;
       startTimer(timeLeft);
-      socket.emit('getBalance');
+      if (socket) socket.emit('getBalance');
     }
     function showGame() {
       lobbyPage.classList.add('hidden');
       gamePage.classList.remove('hidden');
       isGameActive = true;
       clearInterval(lobbyTimerInterval);
-      socket.emit('getBalance');
+      if (socket) socket.emit('getBalance');
     }
     function startTimer(seconds) {
       let left = seconds || 0;
@@ -166,7 +163,6 @@
       }, 1000);
     }
 
-    // Build 1-100 grid and apply taken styles
     function buildNumberGrid() {
       numberGrid.innerHTML = '';
       for (let i = 1; i <= 100; i++) {
@@ -174,19 +170,17 @@
         cell.className = 'grid-cell';
         cell.dataset.number = i;
         cell.textContent = i;
-
         if (takenNumbers.has(i)) {
           cell.classList.add('taken');
         } else {
           cell.addEventListener('click', () => {
             if (isGameActive || takenNumbers.has(i)) return;
-            // Send selection to server
+            if (!socket) { alert('Not connected yet'); return; }
             socket.emit('selectCardNumber', i);
           });
         }
         numberGrid.appendChild(cell);
       }
-      // Highlight currently selected number (if any)
       if (selectedCardNumber) {
         const selectedCell = numberGrid.querySelector(`[data-number='${selectedCardNumber}']`);
         if (selectedCell) selectedCell.classList.add('selected');
@@ -195,71 +189,68 @@
 
     function updateGridWithTakenNumbers(numbers) {
       takenNumbers = new Set(numbers);
-      // Rebuild the grid to reflect new taken statuses
       buildNumberGrid();
     }
 
-    // Connect & authenticate
     async function connect() {
       const initData = tg.initData;
       if (!initData) { alert('Open inside Telegram'); return; }
 
-      const res = await fetch('/api/telegram-miniapp-auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ initData })
-      });
-      const data = await res.json();
-      if (!data.success) { alert('Auth failed'); return; }
+      try {
+        const res = await fetch('/api/telegram-miniapp-auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          alert('Auth failed: ' + (data.error || JSON.stringify(data)));
+          return;
+        }
+        console.log('Auth success, user:', data.userId);
+      } catch (err) {
+        alert('Fetch error: ' + err.message);
+        return;
+      }
 
       socket = io();
 
       socket.on('connect', () => {
-        console.log('Connected');
+        console.log('Socket connected');
         socket.emit('joinLobby');
       });
 
-      // Balance
       socket.on('balanceUpdate', bal => {
         lobbyBalanceEl.textContent = bal;
         gameBalanceEl.textContent = bal;
       });
 
-      // Lobby state (timer + taken numbers)
       socket.on('lobbyState', (state) => {
+        console.log('lobbyState', state);
         showLobby(state.startsIn);
-        if (state.takenNumbers) {
-          updateGridWithTakenNumbers(state.takenNumbers);
-        }
+        if (state.takenNumbers) updateGridWithTakenNumbers(state.takenNumbers);
       });
 
-      // Card successfully assigned to you
       socket.on('yourCard', card => {
         userCard = card;
-        if (isGameActive) {
-          renderCard(card, 'gameCard', true);
-        } else {
-          renderCard(card, 'lobbyCardPreview');
-        }
+        if (isGameActive) renderCard(card, 'gameCard', true);
+        else renderCard(card, 'lobbyCardPreview');
       });
 
-      // A card number was taken by someone (broadcast)
       socket.on('cardTaken', (data) => {
         updateGridWithTakenNumbers(data.takenNumbers);
         selectedCardNumber = null;
         selectedNumberEl.textContent = '-';
-        // Clear my own card preview unless I was the one who took it
-        // (they'll get yourCard separately)
       });
 
-      // Card selection failed (taken or no balance)
       socket.on('cardSelectionFailed', msg => alert(msg));
 
-      // Players count
       socket.on('playersCount', count => playersCountEl.textContent = count);
 
-      // Game events
-      socket.on('gameStarted', showGame);
+      socket.on('gameStarted', () => {
+        console.log('gameStarted');
+        showGame();
+      });
       socket.on('numberCalled', data => {
         currentCallEl.textContent = data.number;
         calledListEl.textContent = 'Called: ' + (data.calledNumbers || []).join(', ');
@@ -277,27 +268,27 @@
       });
       socket.on('invalidBingo', () => alert('❌ Not a valid bingo yet!'));
       socket.on('disconnect', () => console.log('Disconnected'));
+      socket.on('connect_error', (err) => {
+        alert('Socket connection error: ' + err.message);
+        console.error(err);
+      });
     }
 
-    // Deposit / Withdraw
     document.getElementById('depositBtn').addEventListener('click', () => {
-      alert('To deposit, please contact the admin. Your balance will be updated manually.');
+      alert('To deposit, contact the admin. Your balance will be updated manually.');
     });
     document.getElementById('withdrawBtn').addEventListener('click', () => {
       if (socket) socket.emit('requestWithdraw');
       else alert('Not connected');
     });
-
     document.getElementById('randomCardBtn').addEventListener('click', () => {
       if (isGameActive || !socket) return;
       socket.emit('newCardNumber');
     });
-
     document.getElementById('bingoBtn').addEventListener('click', () => {
       if (socket) socket.emit('claimBingo');
     });
 
-    // Start everything
     buildNumberGrid();
     connect();
   </script>
