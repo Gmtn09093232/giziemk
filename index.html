@@ -108,6 +108,7 @@
 
     let takenNumbers = new Set();
 
+    // Render 5x5 card
     function renderCard(card, containerId, clickable = false) {
       const container = document.getElementById(containerId);
       container.innerHTML = '';
@@ -170,6 +171,7 @@
         cell.className = 'grid-cell';
         cell.dataset.number = i;
         cell.textContent = i;
+
         if (takenNumbers.has(i)) {
           cell.classList.add('taken');
         } else {
@@ -181,9 +183,10 @@
         }
         numberGrid.appendChild(cell);
       }
+      // Highlight previously selected number (if any)
       if (selectedCardNumber) {
-        const selectedCell = numberGrid.querySelector(`[data-number='${selectedCardNumber}']`);
-        if (selectedCell) selectedCell.classList.add('selected');
+        const selCell = numberGrid.querySelector(`[data-number='${selectedCardNumber}']`);
+        if (selCell) selCell.classList.add('selected');
       }
     }
 
@@ -207,7 +210,7 @@
           alert('Auth failed: ' + (data.error || JSON.stringify(data)));
           return;
         }
-        console.log('Auth success, user:', data.userId);
+        console.log('Auth success for', data.userId);
       } catch (err) {
         alert('Fetch error: ' + err.message);
         return;
@@ -251,22 +254,28 @@
         console.log('gameStarted');
         showGame();
       });
+
       socket.on('numberCalled', data => {
         currentCallEl.textContent = data.number;
         calledListEl.textContent = 'Called: ' + (data.calledNumbers || []).join(', ');
       });
+
       socket.on('calledNumbers', called => {
         calledListEl.textContent = 'Called: ' + called.join(', ');
       });
+
       socket.on('markedNumbers', numbers => {
         markedNumbers = numbers;
         if (isGameActive && userCard.length) renderCard(userCard, 'gameCard', true);
       });
+
       socket.on('gameEnded', data => {
         isGameActive = false;
         alert(data.winner ? '🎉 Winner: ' + data.winner : 'Game ended with no winner');
       });
+
       socket.on('invalidBingo', () => alert('❌ Not a valid bingo yet!'));
+
       socket.on('disconnect', () => console.log('Disconnected'));
       socket.on('connect_error', (err) => {
         alert('Socket connection error: ' + err.message);
@@ -274,21 +283,25 @@
       });
     }
 
+    // Deposit / Withdraw buttons
     document.getElementById('depositBtn').addEventListener('click', () => {
-      alert('To deposit, contact the admin. Your balance will be updated manually.');
+      alert('To deposit, please contact the admin. Your balance will be updated manually.');
     });
     document.getElementById('withdrawBtn').addEventListener('click', () => {
       if (socket) socket.emit('requestWithdraw');
       else alert('Not connected');
     });
+
     document.getElementById('randomCardBtn').addEventListener('click', () => {
       if (isGameActive || !socket) return;
       socket.emit('newCardNumber');
     });
+
     document.getElementById('bingoBtn').addEventListener('click', () => {
       if (socket) socket.emit('claimBingo');
     });
 
+    // Start everything
     buildNumberGrid();
     connect();
   </script>
