@@ -431,7 +431,7 @@ io.on('connection', async (socket) => {
 
 // ---------- REST endpoints ----------
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname)));
 
 // Admin add balance
 app.post('/admin/add-balance', async (req, res) => {
@@ -463,7 +463,7 @@ app.post('/admin/add-balance', async (req, res) => {
 });
 
 // Serve the HTML
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 // ---------- Start ----------
 const PORT = process.env.PORT || 3000;
