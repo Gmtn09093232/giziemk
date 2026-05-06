@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bingo Admin Panel</title>
+  <style>
+    body { font-family: system-ui; background: #0d1b2a; color: #fff; padding: 20px; max-width: 900px; margin: auto; }
+    h1 { color: #f39c12; }
+    .secret-box { margin-bottom: 20px; }
+    input { padding: 8px; border-radius: 8px; border: none; width: 250px; }
+    button { background: #f39c12; color: #000; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; margin: 4px; }
+    button:active { opacity: 0.8; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; background: #111b27; border-radius: 12px; overflow: hidden; }
+    th { background: #0a1620; padding: 12px; text-align: left; }
+    td { padding: 10px 12px; border-bottom: 1px solid #2e3b4e; }
+    .actions button { margin-right: 6px; }
+    .success { color: #2ecc71; }
+    .error { color: #e74c3c; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <h1>🎰 Bingo Admin Panel</h1>
+
+  <div class="secret-box">
+    <label>Admin Secret:</label><br>
+    <input type="password" id="secretInput" placeholder="Enter admin secret">
+    <button onclick="setSecret()">Set Secret</button>
+    <span id="secretStatus"></span>
+  </div>
+
+  <div id="dashboardContent" class="hidden">
+    <button onclick="loadAll()">🔄 Refresh</button>
+
+    <h2>Pending Deposits</h2>
+    <table id="depositsTable">
+      <thead><tr><th>ID</th><th>User</th><th>Amount</th><th>Time</th><th>Actions</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>Pending Withdrawals</h2>
+    <table id="withdrawalsTable">
+      <thead><tr><th>ID</th><th>User</th><th>Amount</th><th>Time</th><th>Actions</th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <div id="message"></div>
+  </div>
+
+  <script>
+    let adminSecret = '';
+
+    function setSecret() {
+      adminSecret = document.getElementById('secretInput').value.trim();
+      if (adminSecret) {
+        document.getElementById('secretStatus').innerHTML = '<span class="success">Secret set!</span>';
+        document.getElementById('dashboardContent').classList.remove('hidden');
+        loadAll();
+      } else {
+        document.getElementById('secretStatus').innerHTML = '<span class="error">Enter a secret</span>';
+      }
+    }
+
+    async function loadAll() {
+      await loadDeposits();
+      await loadWithdrawals();
+    }
+
+    async function loadDeposits() {
+      const tbody = document.querySelector('#depositsTable tbody');
+      tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+      try {
+        const res = await fetch('/admin/deposits?secret=' + encodeURIComponent(adminSecret));
+        if (!res.ok) throw new Error('Forbidden: wrong secret');
+        const data = await res.json();
+        tbody.innerHTML = '';
+        if (!data.requests || data.requests.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5">No pending deposits</td></tr>';
+          return;
+        }
+        data.requests.forEach(r => {
+          tbody.innerHTML += `
+            <tr>
+              <td>${r.id}</td>
+              <td>${r.username || r.telegram_id}</td>
+              <td>+${r.amount}</td>
+              <td>${new Date(r.created_at).toLocaleString()}</td>
+              <td class="actions">
+                <button onclick="processDeposit(${r.id}, 'approve')">✅ Approve</button>
+                <button onclick="processDeposit(${r.id}, 'reject')">❌ Reject</button>
+              </td>
+            </tr>`;
+        });
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" class="error">Error: ${e.message}</td></tr>`;
+      }
+    }
+
+    async function loadWithdrawals() {
+      const tbody = document.querySelector('#withdrawalsTable tbody');
+      tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+      try {
+        const res = await fetch('/admin/withdrawals?secret=' + encodeURIComponent(adminSecret));
+        if (!res.ok) throw new Error('Forbidden: wrong secret');
+        const data = await res.json();
+        tbody.innerHTML = '';
+        if (!data.requests || data.requests.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5">No pending withdrawals</td></tr>';
+          return;
+        }
+        data.requests.forEach(r => {
+          tbody.innerHTML += `
+            <tr>
+              <td>${r.id}</td>
+              <td>${r.username || r.telegram_id}</td>
+              <td>-${r.amount}</td>
+              <td>${new Date(r.created_at).toLocaleString()}</td>
+              <td class="actions">
+                <button onclick="processWithdrawal(${r.id}, 'approve')">✅ Approve</button>
+                <button onclick="processWithdrawal(${r.id}, 'reject')">❌ Reject</button>
+              </td>
+            </tr>`;
+        });
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="5" class="error">Error: ${e.message}</td></tr>`;
+      }
+    }
+
+    async function processDeposit(id, action) {
+      showMessage(`Processing deposit #${id} (${action})...`);
+      try {
+        const res = await fetch('/admin/process-deposit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ secret: adminSecret, requestId: id, action })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        showMessage(`✅ Deposit #${id} ${action}ed.`, 'success');
+        loadAll();
+      } catch (e) {
+        showMessage(`❌ Error: ${e.message}`, 'error');
+      }
+    }
+
+    async function processWithdrawal(id, action) {
+      showMessage(`Processing withdrawal #${id} (${action})...`);
+      try {
+        const res = await fetch('/admin/process-withdrawal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ secret: adminSecret, requestId: id, action })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        showMessage(`✅ Withdrawal #${id} ${action}ed.`, 'success');
+        loadAll();
+      } catch (e) {
+        showMessage(`❌ Error: ${e.message}`, 'error');
+      }
+    }
+
+    function showMessage(text, type = '') {
+      document.getElementById('message').innerHTML = `<p class="${type}">${text}</p>`;
+      setTimeout(() => document.getElementById('message').innerHTML = '', 5000);
+    }
+  </script>
+</body>
+</html>
