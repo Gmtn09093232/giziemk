@@ -7,6 +7,22 @@ const crypto = require('crypto');
 const { Server } = require('socket.io');
 const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
+const multer = require('multer');
+const fs = require('fs');
+
+// Create uploads folder if missing
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+// Multer config: store file with unique name
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const unique = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, unique + path.extname(file.originalname));
+  }
+});
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB max
 
 // ------------------- Supabase -------------------
 console.log('Connecting to Supabase...');
@@ -21,31 +37,33 @@ const supabase = createClient(
 })();
 
 const app = express();
-app.set('trust proxy', 1);   // REQUIRED for secure cookies on Render
-
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.json());
+app.use('/uploads', express.static(uploadDir)); // serve proof images
 
 const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET || 'bingo_mega_secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: true,            // ✅ must be true on HTTPS
+    secure: true,
     httpOnly: true,
-    sameSite: 'none'         // allows cross‑origin iframes (Telegram Mini App)
+    sameSite: 'none'
   }
 });
 app.use(sessionMiddleware);
 io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
+
 app.get('/api/admin-phone', (req, res) => {
   res.json({ phone: process.env.ADMIN_PHONE || '0924839730' });
 });
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/test-deposit', (req, res) => res.json({ ok: true }));
+
 // ------------------- User cache -------------------
 const users = {};
 async function loadUser(telegramId, username) {
@@ -86,7 +104,6 @@ app.post('/api/telegram-miniapp-auth', async (req, res) => {
   const id = String(userData.id);
   const user = await loadUser(id, userData.first_name || userData.username);
 
-  // Set the user ID in the session and WAIT for the save to complete
   req.session.userId = id;
   req.session.save((err) => {
     if (err) {
@@ -137,7 +154,7 @@ function generateCard() {
   return transposed;
 }
 
-// ------------------- Game state -------------------
+// ------------------- Game state (unchanged) -------------------
 const currentGame = {
   status: 'lobby',
   players: [],
@@ -151,7 +168,7 @@ const currentGame = {
   cardSet: Array.from({ length: 100 }, () => generateCard())
 };
 
-function resetGame() {
+function resetGame() { /* same as original */ 
   clearInterval(currentGame.callInterval);
   clearTimeout(currentGame.lobbyTimer);
   currentGame.status = 'lobby';
@@ -165,7 +182,7 @@ function resetGame() {
   currentGame.lobbyTimer = setTimeout(() => startGame(), 30000);
 }
 
-function startGame() {
+function startGame() { /* unchanged */ 
   if (currentGame.players.length === 0) {
     currentGame.status = 'ended';
     setTimeout(resetGame, 3000);
@@ -185,7 +202,7 @@ function startGame() {
   startCalling();
 }
 
-function startCalling() {
+function startCalling() { /* unchanged */ 
   currentGame.callInterval = setInterval(() => {
     if (currentGame.status !== 'running') { clearInterval(currentGame.callInterval); return; }
     const allNums = Array.from({ length: 75 }, (_, i) => i + 1);
@@ -197,30 +214,18 @@ function startCalling() {
   }, 4000);
 }
 
-function checkBingo(card, marked) {
+function checkBingo(card, marked) { /* unchanged */ 
   const c = card.map(row => row.map(cell => cell === 'FREE' ? 'FREE' : cell));
-
-  // Check rows
-  for (let r = 0; r < 5; r++) {
-    if (c[r].every(v => v === 'FREE' || marked.includes(v))) return true;
-  }
-  // Check columns
-  for (let col = 0; col < 5; col++) {
-    if ([0,1,2,3,4].every(r => c[r][col] === 'FREE' || marked.includes(c[r][col]))) return true;
-  }
-  // Check main diagonal (top‑left to bottom‑right)
+  for (let r = 0; r < 5; r++) if (c[r].every(v => v === 'FREE' || marked.includes(v))) return true;
+  for (let col = 0; col < 5; col++) if ([0,1,2,3,4].every(r => c[r][col] === 'FREE' || marked.includes(c[r][col]))) return true;
   if ([0,1,2,3,4].every(i => c[i][i] === 'FREE' || marked.includes(c[i][i]))) return true;
-  // Check anti‑diagonal (top‑right to bottom‑left)
   if ([0,1,2,3,4].every(i => c[i][4-i] === 'FREE' || marked.includes(c[i][4-i]))) return true;
-
-  // 🔲 Check four corners
   const corners = [c[0][0], c[0][4], c[4][0], c[4][4]];
   if (corners.every(v => v === 'FREE' || marked.includes(v))) return true;
-
   return false;
 }
 
-function endGame(winnerTelegramId) {
+function endGame(winnerTelegramId) { /* unchanged */ 
   currentGame.status = 'ended';
   clearInterval(currentGame.callInterval);
   if (winnerTelegramId) {
@@ -234,39 +239,59 @@ function endGame(winnerTelegramId) {
   setTimeout(resetGame, 5000);
 }
 
-// ---- Deposit ----
-
-app.post('/api/request-deposit', async (req, res) => {
+// ------------------- DEPOSIT (with phone + proof image) -------------------
+app.post('/api/request-deposit', upload.single('proof'), async (req, res) => {
   const userId = req.session?.userId;
   if (!userId) return res.status(401).json({ error: 'Not logged in' });
 
-  const { amount } = req.body;
+  const { phone, amount } = req.body;
+  const file = req.file;
+  if (!phone || !/^0\d{9}$/.test(phone)) {
+    return res.status(400).json({ error: 'Valid phone number required (09xxxxxxxx)' });
+  }
   const amt = Number(amount);
   if (isNaN(amt) || amt <= 0) return res.status(400).json({ error: 'Invalid amount' });
+  if (!file) return res.status(400).json({ error: 'Proof image required' });
 
   const user = await loadUser(userId, null);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
+  const proofPath = `/uploads/${file.filename}`; // relative URL to serve
+
   const { data, error } = await supabase
     .from('deposit_requests')
-    .insert({ telegram_id: userId, username: user.username, amount: amt, status: 'pending' })
+    .insert({
+      telegram_id: userId,
+      username: user.username,
+      amount: amt,
+      status: 'pending',
+      phone: phone,
+      proof_path: proofPath
+    })
     .select()
     .single();
 
-  if (error) { console.error('Deposit insert error:', error.message); return res.status(500).json({ error: 'Internal error' }); }
-  res.json({ success: true, requestId: data.id, message: 'Deposit request submitted. Complete payment and admin will approve.' });
+  if (error) {
+    console.error('Deposit insert error:', error.message);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+  res.json({ success: true, requestId: data.id, message: `Deposit request of ${amt} ETB from ${phone} submitted with proof.` });
 });
 
 app.get('/admin/deposits', async (req, res) => {
   const { secret } = req.query;
   if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
-  const { data, error } = await supabase.from('deposit_requests').select('*').eq('status', 'pending').order('created_at', { ascending: true });
+  const { data, error } = await supabase
+    .from('deposit_requests')
+    .select('*')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
   if (error) return res.status(500).json({ error: error.message });
   res.json({ requests: data });
 });
 
 app.post('/admin/process-deposit', async (req, res) => {
-  const { secret, requestId, action } = req.body;  // action: 'approve' or 'reject'
+  const { secret, requestId, action } = req.body;
   if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
   if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
 
@@ -302,14 +327,13 @@ app.post('/admin/process-deposit', async (req, res) => {
   }
 });
 
-// ---- Withdrawal ----
-
+// ------------------- WITHDRAWAL (improved response) -------------------
 app.post('/api/request-withdraw', async (req, res) => {
   const userId = req.session?.userId;
   if (!userId) return res.status(401).json({ error: 'Not logged in' });
 
   const { amount, phone } = req.body;
-  if (!phone || !/^0\d{9}$/.test(phone)) {       // simple validation: starts with 0, 10 digits
+  if (!phone || !/^0\d{9}$/.test(phone)) {
     return res.status(400).json({ error: 'Invalid phone number' });
   }
   const amt = Number(amount);
@@ -325,7 +349,8 @@ app.post('/api/request-withdraw', async (req, res) => {
     .single();
 
   if (error) { console.error('Withdraw insert error:', error.message); return res.status(500).json({ error: 'Internal error' }); }
-  res.json({ success: true, requestId: data.id, message: 'Withdrawal request submitted. Admin will review.' });
+  // ✅ Now returns amount in the message
+  res.json({ success: true, requestId: data.id, message: `Withdrawal request of ${amt} ETB to ${phone} submitted.` });
 });
 
 app.get('/admin/withdrawals', async (req, res) => {
@@ -374,7 +399,7 @@ app.post('/admin/process-withdrawal', async (req, res) => {
   }
 });
 
-// ------------------- Socket.IO auth -------------------
+// ------------------- Socket.IO auth & events (unchanged) -------------------
 io.use((socket, next) => {
   if (!socket.request.session?.userId) return next(new Error('Unauthorized'));
   socket.userId = socket.request.session.userId;
@@ -382,7 +407,6 @@ io.use((socket, next) => {
   next();
 });
 
-// ------------------- Socket events (unchanged) -------------------
 io.on('connection', async (socket) => {
   socket.emit('balanceUpdate', users[socket.userId]?.balance || 0);
   if (currentGame.status === 'lobby') {
@@ -398,7 +422,7 @@ io.on('connection', async (socket) => {
     }
   }
 
-  socket.on('selectCardNumber', (cardNumber) => {
+  socket.on('selectCardNumber', (cardNumber) => { /* unchanged */ 
     if (currentGame.status !== 'lobby') return;
     const num = Number(cardNumber);
     if (!Number.isInteger(num) || num < 1 || num > 100) return;
@@ -419,7 +443,7 @@ io.on('connection', async (socket) => {
     socket.emit('yourCard', player.card);
   });
 
-  socket.on('newCardNumber', () => {
+  socket.on('newCardNumber', () => { /* unchanged */ 
     if (currentGame.status !== 'lobby') return;
     const freeNumbers = [];
     for (let i = 1; i <= 100; i++) if (!currentGame.takenCardNumbers.has(i)) freeNumbers.push(i);
@@ -438,68 +462,42 @@ io.on('connection', async (socket) => {
     socket.emit('yourCard', player.card);
   });
 
- socket.on('markNumber', (number) => {
-  // 1. Game must be running
-  if (currentGame.status !== 'running') return;
+  socket.on('markNumber', (number) => { /* unchanged */ 
+    if (currentGame.status !== 'running') return;
+    const player = currentGame.players.find(p => p.telegramId === socket.userId);
+    if (!player) return;
+    const num = Number(number);
+    if (number !== 'FREE' && (!Number.isInteger(num) || num < 1 || num > 75)) return;
+    const flatCard = player.card.flat();
+    if (!flatCard.includes(number)) return;
+    if (!currentGame.calledNumbers.includes(num) && number !== 'FREE') return;
+    if (player.markedNumbers.includes(number)) return;
+    player.markedNumbers.push(number);
+    socket.emit('markedNumbers', player.markedNumbers);
+  });
 
-  // 2. Find this player in the current game
-  const player = currentGame.players.find(p => p.telegramId === socket.userId);
-  if (!player) return;
+  socket.on('claimBingo', () => { /* unchanged */ 
+    if (currentGame.status !== 'running') return;
+    const player = currentGame.players.find(p => p.telegramId === socket.userId);
+    if (!player) return;
+    if (checkBingo(player.card, player.markedNumbers)) {
+      endGame(socket.userId);
+    } else {
+      socket.emit('invalidBingo');
+    }
+  });
 
-  // 3. Validate the number
-  const num = Number(number);
-  // - must be a valid integer 1‑75 (or 'FREE' special case, but FREE is not clickable)
-  if (number !== 'FREE' && (!Number.isInteger(num) || num < 1 || num > 75)) return;
-
-  // 4. Only allow marking if the number is actually on this player's card
-  const flatCard = player.card.flat();   // all cell values
-  if (!flatCard.includes(number)) return;
-
-  // 5. Only allow marking if the number has been CALLED (standard bingo rule)
-  if (!currentGame.calledNumbers.includes(num) && number !== 'FREE') return;
-
-  // 6. Don't mark the same number twice
-  if (player.markedNumbers.includes(number)) return;
-
-  // 7. Add the number to marked numbers
-  player.markedNumbers.push(number);
-
-  // 8. Send updated marked numbers ONLY to this player
-  socket.emit('markedNumbers', player.markedNumbers);
-
-  // OPTIONAL: auto‑check bingo here, but the player has a separate “BINGO” button
-});
-  socket.on('claimBingo', () => {
-  // Game must be running
-  if (currentGame.status !== 'running') return;
-
-  // Find the player who pressed BINGO
-  const player = currentGame.players.find(p => p.telegramId === socket.userId);
-  if (!player) return;
-
-  // Check if the player has a valid bingo
-  if (checkBingo(player.card, player.markedNumbers)) {
-    endGame(socket.userId);               // 🎉 winner!
-  } else {
-    socket.emit('invalidBingo');          // ❌ not a valid bingo
-  }
-});
   socket.on('getBalance', async () => { const u = await loadUser(socket.userId, socket.username); socket.emit('balanceUpdate', u.balance); });
   socket.on('requestWithdraw', () => { socket.emit('withdrawRequested', 'Withdraw request sent.'); });
 });
 
-// ---- Place this AFTER all your routes and the static file middleware ----
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err.message);
-  // Always reply with JSON, never HTML
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal server error'
-  });
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
-
-
-// ------------------- Start first lobby -------------------
+// Start the first lobby
 resetGame();
 
 const PORT = process.env.PORT || 3000;
