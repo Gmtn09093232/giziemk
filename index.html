@@ -89,6 +89,7 @@
       if(selectedCardNumber){ const sel=numberGrid.querySelector(`[data-number='${selectedCardNumber}']`); if(sel)sel.classList.add('selected'); }
     }
     function updateGridWithTakenNumbers(nums){ takenNumbers=new Set(nums); buildNumberGrid(); }
+
     async function connect(){
       const initData=tg.initData; if(!initData){alert('Open inside Telegram');return;}
       try{
@@ -96,7 +97,9 @@
         const data=await res.json();
         if(!data.success){alert('Auth failed: '+(data.error||''));return;}
       }catch(e){alert('Fetch error: '+e.message);return;}
+
       socket=io();
+
       socket.on('connect',()=>{socket.emit('joinLobby');});
       socket.on('balanceUpdate',b=>{lobbyBalanceEl.textContent=b;gameBalanceEl.textContent=b;});
       socket.on('lobbyState',state=>{showLobby(state.startsIn); if(state.takenNumbers)updateGridWithTakenNumbers(state.takenNumbers);});
@@ -111,53 +114,54 @@
       socket.on('gameEnded',data=>{isGameActive=false;alert(data.winner?'🎉 Winner: '+data.winner:'Game ended with no winner');});
       socket.on('invalidBingo',()=>alert('❌ Not a valid bingo yet!'));
       socket.on('connect_error',err=>alert('Socket error: '+err.message));
+
+      // Deposit / Withdraw status listeners – MUST be inside connect()
+      socket.on('depositStatus', (data) => {
+        if (data.status === 'approved') alert(`✅ Deposit approved! +${data.amount}`);
+        else if (data.status === 'rejected') alert('❌ Deposit rejected.');
+      });
+      socket.on('withdrawStatus', (data) => {
+        if (data.status === 'approved') alert(`✅ Withdrawal approved! -${data.amount}`);
+        else if (data.status === 'rejected') alert('❌ Withdrawal rejected.');
+      });
     }
-    // ---- Deposit ----
-document.getElementById('depositBtn').onclick = () => {
-  if (!socket) { alert('Not connected'); return; }
-  const amountStr = prompt('Enter amount to deposit:');
-  if (!amountStr) return;
-  const amount = parseFloat(amountStr);
-  if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
-  fetch('/api/request-deposit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ amount })
-  })
-  .then(res => res.json())
-  .then(data => { alert(data.error || data.message); })
-  .catch(err => alert('Network error: ' + err.message));
-};
 
-// ---- Withdraw ----
-document.getElementById('withdrawBtn').onclick = () => {
-  if (!socket) { alert('Not connected'); return; }
-  const amountStr = prompt('Enter amount to withdraw:');
-  if (!amountStr) return;
-  const amount = parseFloat(amountStr);
-  if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
-  fetch('/api/request-withdraw', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ amount })
-  })
-  .then(res => res.json())
-  .then(data => { alert(data.error || data.message); })
-  .catch(err => alert('Network error: ' + err.message));
-};
+    // Deposit / Withdraw button actions (these can stay outside)
+    document.getElementById('depositBtn').onclick = () => {
+      if (!socket) { alert('Not connected'); return; }
+      const amountStr = prompt('Enter amount to deposit:');
+      if (!amountStr) return;
+      const amount = parseFloat(amountStr);
+      if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
+      fetch('/api/request-deposit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount })
+      })
+      .then(res => res.json())
+      .then(data => { alert(data.error || data.message); })
+      .catch(err => alert('Network error: ' + err.message));
+    };
 
-// Real-time status updates
-socket.on('depositStatus', (data) => {
-  if (data.status === 'approved') alert(`✅ Deposit approved! +${data.amount}`);
-  else if (data.status === 'rejected') alert('❌ Deposit rejected.');
-});
+    document.getElementById('withdrawBtn').onclick = () => {
+      if (!socket) { alert('Not connected'); return; }
+      const amountStr = prompt('Enter amount to withdraw:');
+      if (!amountStr) return;
+      const amount = parseFloat(amountStr);
+      if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
+      fetch('/api/request-withdraw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount })
+      })
+      .then(res => res.json())
+      .then(data => { alert(data.error || data.message); })
+      .catch(err => alert('Network error: ' + err.message));
+    };
 
-socket.on('withdrawStatus', (data) => {
-  if (data.status === 'approved') alert(`✅ Withdrawal approved! -${data.amount}`);
-  else if (data.status === 'rejected') alert('❌ Withdrawal rejected.');
-});
     document.getElementById('randomCardBtn').onclick=()=>{if(isGameActive||!socket)return;socket.emit('newCardNumber');};
     document.getElementById('bingoBtn').onclick=()=>{if(socket)socket.emit('claimBingo');};
+
     buildNumberGrid();
     connect();
   </script>
