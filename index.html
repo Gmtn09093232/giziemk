@@ -115,6 +115,14 @@
       socket.on('invalidBingo',()=>alert('❌ Not a valid bingo yet!'));
       socket.on('connect_error',err=>alert('Socket error: '+err.message));
 
+      let adminPhone = '0924839730';   // fallback
+
+// Fetch the admin phone from server (so you can change it without editing HTML)
+fetch('/api/admin-phone')
+  .then(res => res.json())
+  .then(data => { adminPhone = data.phone; })
+  .catch(() => {});   // keep fallback if network error
+
       // Deposit / Withdraw status listeners – MUST be inside connect()
       socket.on('depositStatus', (data) => {
         if (data.status === 'approved') alert(`✅ Deposit approved! +${data.amount}`);
@@ -127,21 +135,23 @@
     }
 
     // Deposit / Withdraw button actions (these can stay outside)
-    document.getElementById('depositBtn').onclick = () => {
-      if (!socket) { alert('Not connected'); return; }
-      const amountStr = prompt('Enter amount to deposit:');
-      if (!amountStr) return;
-      const amount = parseFloat(amountStr);
-      if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
-      fetch('/api/request-deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount })
-      })
-      .then(res => res.json())
-      .then(data => { alert(data.error || data.message); })
-      .catch(err => alert('Network error: ' + err.message));
-    };
+    // ---- Deposit ----
+document.getElementById('depositBtn').onclick = () => {
+  if (!socket) { alert('Not connected'); return; }
+  alert(`Admin phone: ${adminPhone}\nPlease send your payment to this number, then enter the amount below.`);
+  const amountStr = prompt('Enter amount to deposit:');
+  if (!amountStr) return;
+  const amount = parseFloat(amountStr);
+  if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
+  fetch('/api/request-deposit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount })
+  })
+  .then(res => res.json())
+  .then(data => { alert(data.error || data.message); })
+  .catch(err => alert('Network error: ' + err.message));
+};
 
     document.getElementById('withdrawBtn').onclick = () => {
       if (!socket) { alert('Not connected'); return; }
@@ -158,7 +168,26 @@
       .then(data => { alert(data.error || data.message); })
       .catch(err => alert('Network error: ' + err.message));
     };
-
+// ---- Withdraw ----
+document.getElementById('withdrawBtn').onclick = () => {
+  if (!socket) { alert('Not connected'); return; }
+  const phone = prompt('Enter your Ethio telecom phone number (e.g. 0924839730):');
+  if (!phone) return;
+  if (!/^0\d{9}$/.test(phone)) { alert('Invalid phone number'); return; }
+  const amountStr = prompt('Enter amount to withdraw:');
+  if (!amountStr) return;
+  const amount = parseFloat(amountStr);
+  if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
+  fetch('/api/request-withdraw', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount, phone })
+  })
+  .then(res => res.json())
+  .then(data => { alert(data.error || data.message); })
+  .catch(err => alert('Network error: ' + err.message));
+};
+    
     document.getElementById('randomCardBtn').onclick=()=>{if(isGameActive||!socket)return;socket.emit('newCardNumber');};
     document.getElementById('bingoBtn').onclick=()=>{if(socket)socket.emit('claimBingo');};
 
