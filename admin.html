@@ -3,169 +3,160 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bingo Admin Panel</title>
+  <title>🎰 Bingo Admin Panel</title>
   <style>
-    body { font-family: system-ui; background: #0d1b2a; color: #fff; padding: 20px; max-width: 900px; margin: auto; }
+    body { font-family: system-ui; background: #0a0f1c; color: #eee; padding: 20px; }
+    .container { max-width: 1400px; margin: auto; }
     h1 { color: #f39c12; }
-    .secret-box { margin-bottom: 20px; }
-    input { padding: 8px; border-radius: 8px; border: none; width: 250px; }
-    button { background: #f39c12; color: #000; border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer; margin: 4px; }
-    button:active { opacity: 0.8; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; background: #111b27; border-radius: 12px; overflow: hidden; }
-    th { background: #0a1620; padding: 12px; text-align: left; }
-    td { padding: 10px 12px; border-bottom: 1px solid #2e3b4e; }
-    .actions button { margin-right: 6px; }
-    .success { color: #2ecc71; }
-    .error { color: #e74c3c; }
-    .hidden { display: none; }
+    .section { background: #16202a; margin: 20px 0; padding: 20px; border-radius: 24px; }
+    .request-card { background: #1e2a36; border-radius: 16px; margin: 12px 0; padding: 15px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; justify-content: space-between; }
+    .request-info { flex: 2; }
+    .request-info p { margin: 5px 0; }
+    .proof-img { max-width: 150px; max-height: 100px; border-radius: 8px; border: 1px solid #f39c12; }
+    button { background: #f39c12; border: none; padding: 8px 20px; border-radius: 40px; font-weight: bold; cursor: pointer; margin: 0 5px; }
+    button.approve { background: #2ecc71; color: #000; }
+    button.reject { background: #e74c3c; color: #fff; }
+    .refresh { background: #3498db; color: #fff; margin-bottom: 20px; }
   </style>
 </head>
 <body>
+<div class="container">
   <h1>🎰 Bingo Admin Panel</h1>
+  <button class="refresh" onclick="fetchAll()">🔄 Refresh All</button>
 
-  <div class="secret-box">
-    <label>Admin Secret:</label><br>
-    <input type="password" id="secretInput" placeholder="Enter admin secret">
-    <button onclick="setSecret()">Set Secret</button>
-    <span id="secretStatus"></span>
+  <div class="section">
+    <h2>📸 Pending Deposit Requests</h2>
+    <div id="depositList">Loading...</div>
   </div>
 
-  <div id="dashboardContent" class="hidden">
-    <button onclick="loadAll()">🔄 Refresh</button>
-
-    <h2>Pending Deposits</h2>
-    <table id="depositsTable">
-      <thead><tr><th>ID</th><th>User</th><th>Amount</th><th>Time</th><th>Actions</th></tr></thead>
-      <tbody></tbody>
-    </table>
-
-    <h2>Pending Withdrawals</h2>
-    <table id="withdrawalsTable">
-      <thead><tr><th>ID</th><th>User</th><th>Amount</th><th>Time</th><th>Actions</th></tr></thead>
-      <tbody></tbody>
-    </table>
-
-    <div id="message"></div>
+  <div class="section">
+    <h2>💰 Pending Withdrawal Requests</h2>
+    <div id="withdrawList">Loading...</div>
   </div>
 
-  <script>
-    let adminSecret = '';
+  <div class="section">
+    <h2>➕ Manual Add Balance</h2>
+    <input type="text" id="userId" placeholder="Telegram ID (numeric)" style="padding: 8px; border-radius: 20px; border: none;">
+    <input type="number" id="amount" placeholder="Amount" style="padding: 8px; border-radius: 20px; border: none;">
+    <button onclick="addBalance()">Add Balance</button>
+  </div>
+</div>
 
-    function setSecret() {
-      adminSecret = document.getElementById('secretInput').value.trim();
-      if (adminSecret) {
-        document.getElementById('secretStatus').innerHTML = '<span class="success">Secret set!</span>';
-        document.getElementById('dashboardContent').classList.remove('hidden');
-        loadAll();
-      } else {
-        document.getElementById('secretStatus').innerHTML = '<span class="error">Enter a secret</span>';
+<script>
+  const ADMIN_SECRET = prompt("Enter admin secret:") || "your_secret_here";
+  const API_BASE = '';
+
+  async function fetchAll() {
+    await fetchDeposits();
+    await fetchWithdrawals();
+  }
+
+  async function fetchDeposits() {
+    try {
+      const res = await fetch(`${API_BASE}/admin/deposits?secret=${ADMIN_SECRET}`);
+      const data = await res.json();
+      const container = document.getElementById('depositList');
+      if (!data.requests || data.requests.length === 0) {
+        container.innerHTML = '<p>✅ No pending deposits.</p>';
+        return;
       }
+      container.innerHTML = data.requests.map(req => `
+        <div class="request-card">
+          <div class="request-info">
+            <p><strong>ID:</strong> ${req.id}</p>
+            <p><strong>User:</strong> ${req.username} (${req.telegram_id})</p>
+            <p><strong>Phone:</strong> ${req.phone || 'N/A'}</p>
+            <p><strong>Amount:</strong> ${req.amount} ETB</p>
+            <p><strong>Created:</strong> ${new Date(req.created_at).toLocaleString()}</p>
+            ${req.proof_path ? `<img src="${req.proof_path}" class="proof-img" onclick="window.open(this.src)" style="cursor:pointer;">` : '<p>No proof</p>'}
+          </div>
+          <div>
+            <button class="approve" onclick="processDeposit(${req.id}, 'approve')">✅ Approve</button>
+            <button class="reject" onclick="processDeposit(${req.id}, 'reject')">❌ Reject</button>
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      console.error(err);
+      document.getElementById('depositList').innerHTML = '<p>Error loading deposits</p>';
     }
+  }
 
-    async function loadAll() {
-      await loadDeposits();
-      await loadWithdrawals();
-    }
-
-    async function loadDeposits() {
-      const tbody = document.querySelector('#depositsTable tbody');
-      tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
-      try {
-        const res = await fetch('/admin/deposits?secret=' + encodeURIComponent(adminSecret));
-        if (!res.ok) throw new Error('Forbidden: wrong secret');
-        const data = await res.json();
-        tbody.innerHTML = '';
-        if (!data.requests || data.requests.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5">No pending deposits</td></tr>';
-          return;
-        }
-        data.requests.forEach(r => {
-          tbody.innerHTML += `
-            <tr>
-              <td>${r.id}</td>
-              <td>${r.username || r.telegram_id}</td>
-              <td>+${r.amount}</td>
-              <td>${new Date(r.created_at).toLocaleString()}</td>
-              <td class="actions">
-                <button onclick="processDeposit(${r.id}, 'approve')">✅ Approve</button>
-                <button onclick="processDeposit(${r.id}, 'reject')">❌ Reject</button>
-              </td>
-            </tr>`;
-        });
-      } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="5" class="error">Error: ${e.message}</td></tr>`;
+  async function fetchWithdrawals() {
+    try {
+      const res = await fetch(`${API_BASE}/admin/withdrawals?secret=${ADMIN_SECRET}`);
+      const data = await res.json();
+      const container = document.getElementById('withdrawList');
+      if (!data.requests || data.requests.length === 0) {
+        container.innerHTML = '<p>✅ No pending withdrawals.</p>';
+        return;
       }
+      container.innerHTML = data.requests.map(req => `
+        <div class="request-card">
+          <div class="request-info">
+            <p><strong>ID:</strong> ${req.id}</p>
+            <p><strong>User:</strong> ${req.username} (${req.telegram_id})</p>
+            <p><strong>Phone:</strong> ${req.phone_number}</p>
+            <p><strong>Amount:</strong> ${req.amount} ETB</p>
+            <p><strong>Created:</strong> ${new Date(req.created_at).toLocaleString()}</p>
+          </div>
+          <div>
+            <button class="approve" onclick="processWithdrawal(${req.id}, 'approve')">✅ Approve</button>
+            <button class="reject" onclick="processWithdrawal(${req.id}, 'reject')">❌ Reject</button>
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      console.error(err);
+      document.getElementById('withdrawList').innerHTML = '<p>Error loading withdrawals</p>';
     }
+  }
 
-    async function loadWithdrawals() {
-      const tbody = document.querySelector('#withdrawalsTable tbody');
-      tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
-      try {
-        const res = await fetch('/admin/withdrawals?secret=' + encodeURIComponent(adminSecret));
-        if (!res.ok) throw new Error('Forbidden: wrong secret');
-        const data = await res.json();
-        tbody.innerHTML = '';
-        if (!data.requests || data.requests.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5">No pending withdrawals</td></tr>';
-          return;
-        }
-      data.requests.forEach(r => {
-  tbody.innerHTML += `
-    <tr>
-      <td>${r.id}</td>
-      <td>${r.username || r.telegram_id}</td>
-      <td>${r.phone_number || '-'}</td>    <!-- new column -->
-      <td>-${r.amount}</td>
-      <td>${new Date(r.created_at).toLocaleString()}</td>
-      <td class="actions">
-        <button onclick="processWithdrawal(${r.id}, 'approve')">✅ Approve</button>
-        <button onclick="processWithdrawal(${r.id}, 'reject')">❌ Reject</button>
-      </td>
-    </tr>`;
-});
-      } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="5" class="error">Error: ${e.message}</td></tr>`;
-      }
-    }
+  async function processDeposit(requestId, action) {
+    if (!confirm(`Are you sure to ${action} this deposit?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/admin/process-deposit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret: ADMIN_SECRET, requestId, action })
+      });
+      const data = await res.json();
+      alert(data.success ? `Deposit ${action}d successfully!` : (data.error || 'Error'));
+      fetchDeposits();
+    } catch (err) { alert(err.message); }
+  }
 
-    async function processDeposit(id, action) {
-      showMessage(`Processing deposit #${id} (${action})...`);
-      try {
-        const res = await fetch('/admin/process-deposit', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ secret: adminSecret, requestId: id, action })
-        });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        showMessage(`✅ Deposit #${id} ${action}ed.`, 'success');
-        loadAll();
-      } catch (e) {
-        showMessage(`❌ Error: ${e.message}`, 'error');
-      }
-    }
+  async function processWithdrawal(requestId, action) {
+    if (!confirm(`Are you sure to ${action} this withdrawal?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/admin/process-withdrawal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret: ADMIN_SECRET, requestId, action })
+      });
+      const data = await res.json();
+      alert(data.success ? `Withdrawal ${action}d successfully!` : (data.error || 'Error'));
+      fetchWithdrawals();
+    } catch (err) { alert(err.message); }
+  }
 
-    async function processWithdrawal(id, action) {
-      showMessage(`Processing withdrawal #${id} (${action})...`);
-      try {
-        const res = await fetch('/admin/process-withdrawal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ secret: adminSecret, requestId: id, action })
-        });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        showMessage(`✅ Withdrawal #${id} ${action}ed.`, 'success');
-        loadAll();
-      } catch (e) {
-        showMessage(`❌ Error: ${e.message}`, 'error');
-      }
-    }
+  async function addBalance() {
+    const telegramId = document.getElementById('userId').value.trim();
+    const amount = document.getElementById('amount').value.trim();
+    if (!telegramId || !amount) { alert('Fill all fields'); return; }
+    try {
+      const res = await fetch(`${API_BASE}/admin/add-balance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret: ADMIN_SECRET, telegramId, amount: Number(amount) })
+      });
+      const data = await res.json();
+      alert(data.success ? `Added ${amount} to user. New balance: ${data.newBalance}` : (data.error || 'Error'));
+    } catch (err) { alert(err.message); }
+  }
 
-    function showMessage(text, type = '') {
-      document.getElementById('message').innerHTML = `<p class="${type}">${text}</p>`;
-      setTimeout(() => document.getElementById('message').innerHTML = '', 5000);
-    }
-  </script>
+  fetchAll();
+  setInterval(fetchAll, 10000); // auto refresh every 10 sec
+</script>
 </body>
 </html>
