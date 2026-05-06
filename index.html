@@ -394,10 +394,8 @@
     <!-- Number selection category -->
     <div class="selection-row">
       <span>🎯 Pick card ID (1-100):</span>
-      <div class="selected-number-badge">
-        🎴 Selected: <span id="selectedNumber">-</span>
-      </div>
-      <button id="randomCardBtn" style="background:#4a2f1a; color:#ffd58c;">✨ Random Card</button>
+  
+      <button id="randomCardBtn" style="background:#4a2f1a; color:#ffd58c;"></button>
     </div>
 
     <!-- 100-cell dynamic grid -->
@@ -595,41 +593,73 @@
     }
 
     // Deposit with adminPhone
-    document.getElementById('depositBtn').onclick = () => {
-      if (!socket) { alert('Not connected'); return; }
-      alert(`📞 Admin TeleBirr: ${adminPhone}\nSend payment to this number, then enter amount.`);
-      const amountStr = prompt('Deposit amount (ETB):');
-      if (!amountStr) return;
-      const amount = parseFloat(amountStr);
-      if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
-      fetch('/api/request-deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount })
-      })
-      .then(res => res.json())
-      .then(data => { alert(data.error || data.message); })
-      .catch(err => alert('Network: ' + err.message));
-    };
 
-    document.getElementById('withdrawBtn').onclick = () => {
-      if (!socket) { alert('Not connected'); return; }
-      const phone = prompt('📱 Ethio telecom phone (09xxxxxxxx):');
-      if (!phone) return;
-      if (!/^0\d{9}$/.test(phone)) { alert('Invalid format. Use 09xxxxxxxx'); return; }
-      const amountStr = prompt('Withdraw amount (ETB):');
-      if (!amountStr) return;
-      const amount = parseFloat(amountStr);
-      if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
-      fetch('/api/request-withdraw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount, phone })
-      })
-      .then(res => res.json())
-      .then(data => { alert(data.error || data.message); })
-      .catch(err => alert('Network: ' + err.message));
-    };
+    // --- Improved Withdraw Button ---
+document.getElementById('withdrawBtn').onclick = () => {
+  if (!socket) { alert('Not connected'); return; }
+
+  const phone = prompt('📱 Ethio telecom phone number (e.g., 0912345678):');
+  if (!phone) return;
+  if (!/^0\d{9}$/.test(phone)) {
+    alert('❌ Invalid phone number. Must be 10 digits starting with 0.');
+    return;
+  }
+
+  const amountStr = prompt('💰 Withdraw amount (ETB):');
+  if (!amountStr) return;
+  const amount = parseFloat(amountStr);
+  if (isNaN(amount) || amount <= 0) {
+    alert('❌ Please enter a valid positive amount.');
+    return;
+  }
+
+  // Show user what we're sending
+  const confirmMsg = `📤 Withdrawal request:
+  Phone: ${phone}
+  Amount: ${amount} ETB
+  Proceed?`;
+  if (!confirm(confirmMsg)) return;
+
+  fetch('/api/request-withdraw', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount, phone })
+  })
+    .then(res => res.json())
+    .then(data => {
+      // Always show amount in the final alert
+      const serverMsg = data.message || data.error || 'Request processed';
+      alert(`💸 Withdrawal of ${amount} ETB to ${phone}\n📢 Server response: ${serverMsg}`);
+    })
+    .catch(err => alert('Network error: ' + err.message));
+};
+
+// --- Improved Deposit Button (for consistency) ---
+document.getElementById('depositBtn').onclick = () => {
+  if (!socket) { alert('Not connected'); return; }
+  const amountStr = prompt('💵 Deposit amount (ETB):');
+  if (!amountStr) return;
+  const amount = parseFloat(amountStr);
+  if (isNaN(amount) || amount <= 0) {
+    alert('Invalid amount');
+    return;
+  }
+
+  const confirmMsg = `💳 Deposit ${amount} ETB via TeleBirr to ${adminPhone}\nConfirm?`;
+  if (!confirm(confirmMsg)) return;
+
+  fetch('/api/request-deposit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount })
+  })
+    .then(res => res.json())
+    .then(data => {
+      const serverMsg = data.message || data.error || 'Request processed';
+      alert(`✅ Deposit request for ${amount} ETB\n📢 ${serverMsg}`);
+    })
+    .catch(err => alert('Network error: ' + err.message));
+};
 
     document.getElementById('randomCardBtn').onclick = () => { if(!isGameActive && socket) socket.emit('newCardNumber'); };
     document.getElementById('bingoBtn').onclick = () => { if(socket) socket.emit('claimBingo'); };
