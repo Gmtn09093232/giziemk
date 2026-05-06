@@ -82,9 +82,16 @@ app.post('/api/telegram-miniapp-auth', async (req, res) => {
   const userData = JSON.parse(params.get('user'));
   const id = String(userData.id);
   const user = await loadUser(id, userData.first_name || userData.username);
+
+  // Set the user ID in the session and WAIT for the save to complete
   req.session.userId = id;
-  req.session.save();
-  res.json({ success: true, userId: id, username: user.username, balance: user.balance });
+  req.session.save((err) => {
+    if (err) {
+      console.error('Session save error:', err);
+      return res.status(500).json({ success: false, error: 'Session save failed' });
+    }
+    res.json({ success: true, userId: id, username: user.username, balance: user.balance });
+  });
 });
 
 // ------------------- Admin add balance -------------------
