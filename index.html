@@ -138,7 +138,7 @@
   // ---- Deposit (works because adminPhone is global) ----
   document.getElementById('depositBtn').onclick = () => {
     if (!socket) { alert('Not connected'); return; }
-    alert(`Admin phone: ${adminPhone}\nPlease send your payment to this number, then enter the amount below.`);
+    alert(`Admin phone: ${adminPhone}\nPlease send your payment to this number by TeleBirr, then enter the amount below.`);
     const amountStr = prompt('Enter amount to deposit:');
     if (!amountStr) return;
     const amount = parseFloat(amountStr);
