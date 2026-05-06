@@ -224,6 +224,111 @@ function endGame(winnerTelegramId) {
   setTimeout(resetGame, 5000);
 }
 
+app.post('/api/request-deposit', async (req, res) => {
+  const userId = req.session?.userId;
+  if (!userId) return res.status(401).json({ error: 'Not logged in' });
+
+  const { amount } = req.body;
+  const amt = Number(amount);
+  if (isNaN(amt) || amt <= 0) return res.status(400).json({ error: 'Invalid amount' });
+
+  const user = await loadUser(userId, null);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  // Insert a pending deposit request – balance NOT changed yet
+  const { data, error } = await supabase
+    .from('deposit_requests')
+    .insert({
+      telegram_id: userId,
+      username: user.username,
+      amount: amt,
+      status: 'pending'
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Deposit insert error:', error.message);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+
+  res.json({ success: true, requestId: data.id, message: 'Deposit request submitted. Complete payment and admin will approve.' });
+});
+
+app.get('/admin/deposits', async (req, res) => {
+  const { secret } = req.query;
+  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+
+  const { data, error } = await supabase
+    .from('deposit_requests')
+    .select('*')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ requests: data });
+});
+
+app.post('/admin/process-deposit', async (req, res) => {
+  const { secret, requestId, action } = req.body;   // action: 'approve' or 'reject'
+  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+  if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'Invalid action' });
+
+  // Fetch the deposit request
+  const { data: reqData, error: fetchErr } = await supabase
+    .from('deposit_requests')
+    .select('*')
+    .eq('id', requestId)
+    .single();
+
+  if (fetchErr || !reqData) return res.status(404).json({ error: 'Request not found' });
+  if (reqData.status !== 'pending') return res.status(400).json({ error: 'Already processed' });
+
+  if (action === 'approve') {
+    // Add the deposited amount to the player's balance
+    const user = await loadUser(reqData.telegram_id, null);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.balance += reqData.amount;
+    await supabase.from('users').update({ balance: user.balance }).eq('telegram_id', reqData.telegram_id);
+
+    // Mark request as approved
+    const { error: updateErr } = await supabase
+      .from('deposit_requests')
+      .update({ status: 'approved', processed_at: new Date().toISOString() })
+      .eq('id', requestId);
+
+    if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+    // Notify the player in real time
+    const sockets = await io.fetchSockets();
+    const playerSocket = sockets.find(s => s.userId === reqData.telegram_id);
+    if (playerSocket) {
+      playerSocket.emit('balanceUpdate', user.balance);
+      playerSocket.emit('depositStatus', { status: 'approved', amount: reqData.amount });
+    }
+
+    res.json({ success: true, newBalance: user.balance });
+  } else { // reject
+    const { error: updateErr } = await supabase
+      .from('deposit_requests')
+      .update({ status: 'rejected', processed_at: new Date().toISOString() })
+      .eq('id', requestId);
+
+    if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+    const sockets = await io.fetchSockets();
+    const playerSocket = sockets.find(s => s.userId === reqData.telegram_id);
+    if (playerSocket) {
+      playerSocket.emit('depositStatus', { status: 'rejected', amount: reqData.amount });
+    }
+
+    res.json({ success: true });
+  }
+});
+
+
+
 // ------------------- Socket.IO auth -------------------
 io.use((socket, next) => {
   if (!socket.request.session?.userId) return next(new Error('Unauthorized'));
