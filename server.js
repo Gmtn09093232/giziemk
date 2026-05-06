@@ -45,7 +45,7 @@ app.get('/api/admin-phone', (req, res) => {
 });
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-
+app.get('/test-deposit', (req, res) => res.json({ ok: true }));
 // ------------------- User cache -------------------
 const users = {};
 async function loadUser(telegramId, username) {
