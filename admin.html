@@ -109,19 +109,20 @@
           tbody.innerHTML = '<tr><td colspan="5">No pending withdrawals</td></tr>';
           return;
         }
-        data.requests.forEach(r => {
-          tbody.innerHTML += `
-            <tr>
-              <td>${r.id}</td>
-              <td>${r.username || r.telegram_id}</td>
-              <td>-${r.amount}</td>
-              <td>${new Date(r.created_at).toLocaleString()}</td>
-              <td class="actions">
-                <button onclick="processWithdrawal(${r.id}, 'approve')">✅ Approve</button>
-                <button onclick="processWithdrawal(${r.id}, 'reject')">❌ Reject</button>
-              </td>
-            </tr>`;
-        });
+      data.requests.forEach(r => {
+  tbody.innerHTML += `
+    <tr>
+      <td>${r.id}</td>
+      <td>${r.username || r.telegram_id}</td>
+      <td>${r.phone_number || '-'}</td>    <!-- new column -->
+      <td>-${r.amount}</td>
+      <td>${new Date(r.created_at).toLocaleString()}</td>
+      <td class="actions">
+        <button onclick="processWithdrawal(${r.id}, 'approve')">✅ Approve</button>
+        <button onclick="processWithdrawal(${r.id}, 'reject')">❌ Reject</button>
+      </td>
+    </tr>`;
+});
       } catch (e) {
         tbody.innerHTML = `<tr><td colspan="5" class="error">Error: ${e.message}</td></tr>`;
       }
