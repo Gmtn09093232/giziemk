@@ -40,6 +40,9 @@ const sessionMiddleware = session({
 });
 app.use(sessionMiddleware);
 io.use((socket, next) => sessionMiddleware(socket.request, {}, next));
+app.get('/api/admin-phone', (req, res) => {
+  res.json({ phone: process.env.ADMIN_PHONE || '0924839730' });
+});
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
@@ -305,7 +308,10 @@ app.post('/api/request-withdraw', async (req, res) => {
   const userId = req.session?.userId;
   if (!userId) return res.status(401).json({ error: 'Not logged in' });
 
-  const { amount } = req.body;
+  const { amount, phone } = req.body;
+  if (!phone || !/^0\d{9}$/.test(phone)) {       // simple validation: starts with 0, 10 digits
+    return res.status(400).json({ error: 'Invalid phone number' });
+  }
   const amt = Number(amount);
   if (isNaN(amt) || amt <= 0) return res.status(400).json({ error: 'Invalid amount' });
 
@@ -314,7 +320,7 @@ app.post('/api/request-withdraw', async (req, res) => {
 
   const { data, error } = await supabase
     .from('withdrawal_requests')
-    .insert({ telegram_id: userId, username: user.username, amount: amt, status: 'pending' })
+    .insert({ telegram_id: userId, username: user.username, amount: amt, status: 'pending', phone_number: phone })
     .select()
     .single();
 
@@ -354,7 +360,7 @@ app.post('/admin/process-withdrawal', async (req, res) => {
     const playerSocket = sockets.find(s => s.userId === reqData.telegram_id);
     if (playerSocket) {
       playerSocket.emit('balanceUpdate', user.balance);
-      playerSocket.emit('withdrawStatus', { status: 'approved', amount: reqData.amount });
+      playerSocket.emit('withdrawStatus', { status: 'approved', amount: reqData.amount, phone: reqData.phone_number });
     }
     res.json({ success: true, newBalance: user.balance });
   } else {
