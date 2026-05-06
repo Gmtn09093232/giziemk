@@ -3,181 +3,640 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-  <title>Bingo Lobby</title>
+  <title>✨ Nebula Bingo — Advanced Arena</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    * { box-sizing:border-box; -webkit-user-select:none; user-select:none; }
-    body { margin:0; font-family:system-ui; background:radial-gradient(circle at top, #0d1b2a, #05080f); color:#fff; padding:15px; text-align:center; }
-    .page { max-width:450px; margin:auto; background:#111b27; padding:15px; border-radius:20px; }
-    .hidden { display:none!important; }
-    .balance-box { display:flex; justify-content:space-between; align-items:center; background:#0a1620; padding:12px; border-radius:12px; margin-bottom:15px; }
-    button { background:#f39c12; color:#000; border:none; padding:10px 16px; border-radius:12px; font-weight:bold; cursor:pointer; margin:4px; }
-    button:active { opacity:0.8; }
-    .timer { font-size:24px; font-weight:bold; margin:10px 0; }
-    .grid-100 { display:grid; grid-template-columns:repeat(10,1fr); gap:6px; margin:20px 0; }
-    .grid-cell { background:#1b2a38; border-radius:8px; padding:12px 0; font-weight:bold; cursor:pointer; }
-    .grid-cell.taken { background:#7f2a2a; cursor:not-allowed; text-decoration:line-through; }
-    .grid-cell.selected { background:#f39c12; color:#000; }
-    .card-container table { border-collapse:collapse; margin:10px auto; }
-    td { width:40px; height:40px; border:2px solid #2e3b4e; text-align:center; vertical-align:middle; background:#1b2a38; font-weight:bold; }
-    td.marked { background:#ffd966; color:#000; }
-    td.free { background:#3a4a5a; font-style:italic; }
-    #calledList { max-height:80px; overflow-y:auto; margin:10px 0; font-size:14px; color:#aaa; }
-    #currentCall { font-size:40px; margin:10px 0; font-weight:bold; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      min-height: 100vh;
+      background: radial-gradient(ellipse at 30% 10%, #0b1120, #03060c);
+      font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* LOBBY & GAME PANELS — Glassmorphic core */
+    .page {
+      max-width: 560px;
+      width: 100%;
+      margin: 0 auto;
+      background: rgba(18, 25, 45, 0.65);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-radius: 48px;
+      padding: 20px 20px 28px;
+      box-shadow: 0 25px 45px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(243, 156, 18, 0.25);
+      transition: all 0.2s ease;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* TYPOGRAPHY & GLOBAL */
+    h2 {
+      font-size: 1.9rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #ffe6b0, #f39c12);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+      display: inline-block;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    /* FLEX INFO ROW (balance, timer, players) */
+    .info-grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      background: rgba(5, 12, 22, 0.7);
+      border-radius: 60px;
+      padding: 8px 16px;
+      margin-bottom: 24px;
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(243, 156, 18, 0.3);
+    }
+
+    .balance-box {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: #0a121f;
+      padding: 6px 16px;
+      border-radius: 40px;
+      font-weight: 600;
+      font-size: 1.1rem;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.3), 0 5px 10px rgba(0,0,0,0.2);
+    }
+
+    .balance-box span {
+      color: #ffdd99;
+    }
+
+    .balance-box b {
+      color: #f7b32b;
+      font-size: 1.25rem;
+      margin-left: 6px;
+    }
+
+    .timer {
+      font-size: 2.2rem;
+      font-weight: 800;
+      background: linear-gradient(145deg, #f39c12, #e67e22);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 0 8px rgba(243,156,18,0.4);
+      letter-spacing: 2px;
+      font-family: monospace;
+    }
+
+    .players-badge {
+      background: #1e2a3a;
+      padding: 6px 16px;
+      border-radius: 60px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.9rem;
+      backdrop-filter: blur(4px);
+    }
+
+    .players-badge::before {
+      content: "👥";
+      font-size: 1rem;
+      filter: drop-shadow(0 1px 1px black);
+    }
+
+    /* BUTTONS — premium elevated */
+    button {
+      background: linear-gradient(105deg, #f39c12, #e67e22);
+      border: none;
+      padding: 8px 18px;
+      border-radius: 60px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: #0f0f1c;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+      box-shadow: 0 5px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.3);
+      letter-spacing: 0.3px;
+    }
+
+    button:active {
+      transform: scale(0.96);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+    }
+
+    #depositBtn, #withdrawBtn {
+      background: #2c3e4e;
+      color: #ffd966;
+      box-shadow: inset 0 1px 0 #3a5a6e, 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    #depositBtn:active, #withdrawBtn:active { transform: scale(0.96);}
+
+    #randomCardBtn {
+      background: linear-gradient(135deg, #4a6a8a, #2a4a6a);
+      color: #ffecb3;
+    }
+
+    #bingoBtn {
+      background: linear-gradient(115deg, #e67e22, #f1c40f);
+      font-size: 1.3rem;
+      padding: 14px 20px;
+      width: 100%;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-weight: 800;
+      margin-top: 10px;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.4);
+    }
+
+    /* 100-NUMBER GRID — perfect squares, tactile */
+    .grid-100 {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 8px;
+      margin: 20px 0 18px;
+    }
+
+    .grid-cell {
+      background: rgba(20, 32, 48, 0.8);
+      backdrop-filter: blur(2px);
+      border-radius: 14px;
+      aspect-ratio: 1 / 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: #ecf0f1;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      box-shadow: inset 0 0 0 1px rgba(243,156,18,0.2), 0 2px 6px rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,215,120,0.3);
+    }
+
+    .grid-cell:active { transform: scale(0.94); background: #f39c12; color: #000; }
+
+    .grid-cell.taken {
+      background: #6d2e2e;
+      text-decoration: line-through;
+      opacity: 0.6;
+      cursor: not-allowed;
+      filter: grayscale(0.2);
+      box-shadow: inset 0 0 0 1px #ab4747;
+      transform: none;
+    }
+
+    .grid-cell.selected {
+      background: radial-gradient(circle at 30% 20%, #f7b32b, #e67e22);
+      color: #0a0f1a;
+      box-shadow: 0 0 12px rgba(243,156,18,0.8);
+      border: 1px solid #ffdd99;
+      font-weight: 800;
+    }
+
+    /* card preview & game card container */
+    .card-container {
+      margin-top: 18px;
+      display: flex;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 32px;
+      padding: 10px;
+      backdrop-filter: blur(8px);
+    }
+
+    .card-container table {
+      border-collapse: separate;
+      border-spacing: 6px;
+      margin: 0 auto;
+      background: transparent;
+    }
+
+    .card-container td {
+      width: 58px;
+      height: 58px;
+      background: #0f1a24;
+      border-radius: 18px;
+      text-align: center;
+      vertical-align: middle;
+      font-weight: 700;
+      font-size: 1.2rem;
+      color: #f8f9fc;
+      transition: all 0.15s ease;
+      box-shadow: inset 0 1px 1px rgba(0,0,0,0.4), 0 3px 6px rgba(0,0,0,0.3);
+      border: 1px solid rgba(243,156,18,0.5);
+    }
+
+    .card-container td.marked {
+      background: radial-gradient(circle at 30% 35%, #f7d44a, #e67e22);
+      color: #0e1a24;
+      transform: scale(0.98);
+      box-shadow: 0 0 14px #f39c12;
+      font-weight: 800;
+    }
+
+    .card-container td.free {
+      background: #2a3e4e;
+      color: #ffd966;
+      font-style: normal;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    /* current call region */
+    .call-hero {
+      background: linear-gradient(145deg, #0b121f, #03060c);
+      border-radius: 80px;
+      padding: 12px 20px;
+      text-align: center;
+      margin: 20px 0 10px;
+      border: 1px solid #f39c12;
+      box-shadow: 0 0 16px rgba(243,156,18,0.3);
+    }
+
+    #currentCall {
+      font-size: 4rem;
+      font-weight: 800;
+      font-family: monospace;
+      letter-spacing: 6px;
+      background: linear-gradient(135deg, #ffd966, #f39c12);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 0 8px #e67e22;
+    }
+
+    #calledList {
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 48px;
+      padding: 12px 16px;
+      font-size: 0.85rem;
+      color: #ffe0aa;
+      overflow-x: auto;
+      white-space: nowrap;
+      margin: 12px 0;
+      font-weight: 500;
+      scrollbar-width: thin;
+    }
+
+    /* selection row */
+    .selection-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 8px 0 0;
+      background: rgba(5, 15, 25, 0.6);
+      padding: 8px 15px;
+      border-radius: 60px;
+    }
+
+    .selected-number-badge {
+      background: #1e2a36;
+      padding: 6px 16px;
+      border-radius: 32px;
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+
+    .selected-number-badge span {
+      color: #f7b32b;
+      font-weight: 800;
+      font-size: 1.2rem;
+    }
+
+    /* responsive touches */
+    @media (max-width: 520px) {
+      .page { padding: 16px; border-radius: 36px; }
+      .card-container td { width: 48px; height: 48px; font-size: 1rem; }
+      .grid-cell { font-size: 0.75rem; }
+      .info-grid { gap: 8px; }
+      .timer { font-size: 1.7rem; }
+      #currentCall { font-size: 2.8rem; letter-spacing: 3px; }
+    }
+
+    @media (max-width: 450px) {
+      .grid-100 { gap: 5px; }
+      .card-container td { width: 42px; height: 42px; border-radius: 14px; }
+      .balance-box { padding: 4px 12px; font-size: 0.9rem; }
+      button { padding: 6px 14px; font-size: 0.75rem; }
+    }
+
+    /* custom scroll */
+    #calledList::-webkit-scrollbar { height: 4px; background: #2c3e4e; border-radius: 10px; }
+    #calledList::-webkit-scrollbar-thumb { background: #f39c12; border-radius: 10px; }
+
+    /* additional glass touches */
+    .glow-text {
+      text-shadow: 0 0 5px #ffb347;
+    }
+
+    /* better call queue */
+    .bingo-pulse {
+      animation: pulse 0.5s ease-out;
+    }
+
+    @keyframes pulse {
+      0% { text-shadow: 0 0 0px #f39c12; transform: scale(1);}
+      70% { text-shadow: 0 0 20px #f7b32b; transform: scale(1.02);}
+    }
+
+    /* make game card clickable effect */
+    .card-container td {
+      cursor: default;
+    }
+    .card-container td:active {
+      transform: scale(0.97);
+    }
   </style>
 </head>
 <body>
   <div id="lobbyPage" class="page">
-    <h2>🎰 Bingo Lobby</h2>
-    <div class="balance-box">
-      <span>💰 Balance: <b id="lobbyBalance">0</b></span>
-      <div>
-        <button id="depositBtn">+ Deposit</button>
-        <button id="withdrawBtn">- Withdraw</button>
-      </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+      <h2>🎰 NEBULA BINGO</h2>
+      <div class="players-badge" id="playersCountWrap">👥 <span id="playersCount">0</span></div>
     </div>
-    <p class="timer" id="lobbyTimer">30s</p>
-    <p>Pick your Bingo card number:</p>
+
+    <!-- modular info row: balance + timer + actions -->
+    <div class="info-grid">
+      <div class="balance-box">
+        <span>💰 BAL</span>
+        <b id="lobbyBalance">0</b>
+        <div style="display: flex; gap: 6px; margin-left: 8px;">
+          <button id="depositBtn" style="padding: 4px 12px; font-size: 0.7rem;">+Deposit</button>
+          <button id="withdrawBtn" style="padding: 4px 12px; font-size: 0.7rem;">-Withdraw</button>
+        </div>
+      </div>
+      <div class="timer" id="lobbyTimer">30s</div>
+    </div>
+
+    <!-- Number selection category -->
+    <div class="selection-row">
+      <span>🎯 Pick card ID (1-100):</span>
+      <div class="selected-number-badge">
+        🎴 Selected: <span id="selectedNumber">-</span>
+      </div>
+      <button id="randomCardBtn" style="background:#4a2f1a; color:#ffd58c;">✨ Random Card</button>
+    </div>
+
+    <!-- 100-cell dynamic grid -->
     <div id="numberGrid" class="grid-100"></div>
-    <p>Selected number: <span id="selectedNumber">-</span></p>
-    <button id="randomCardBtn">🎲 Random Card</button>
-    <p>👥 Players: <span id="playersCount">0</span></p>
+
+    <!-- live card preview in lobby (with glass) -->
+    <div style="margin-top: 8px; text-align: left; font-size: 0.8rem; opacity: 0.8;">🎴 Your current card preview</div>
     <div id="lobbyCardPreview" class="card-container"></div>
   </div>
+
+  <!-- GAME PAGE — immersive arena -->
   <div id="gamePage" class="page hidden">
-    <h2>⚡ Game</h2>
-    <div class="balance-box">
-      <span>💰 Balance: <b id="gameBalance">0</b></span>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+      <h2>⚡ LIVE BINGO</h2>
+      <div class="balance-box" style="background:#0f1825;">
+        <span>💰</span>
+        <b id="gameBalance">0</b>
+      </div>
     </div>
-    <div id="currentCall">-</div>
+
+    <div class="call-hero">
+      <div style="font-size: 0.8rem; letter-spacing: 2px; opacity: 0.8;">🎲 LAST CALL</div>
+      <div id="currentCall">-</div>
+    </div>
+
+    <div id="calledList" style="font-family: monospace; font-weight: 500;">Called: —</div>
+
     <div class="card-container" id="gameCard"></div>
-    <div id="calledList">Called: </div>
-    <button id="bingoBtn">🏆 BINGO!</button>
+
+    <button id="bingoBtn">🏆 CLAIM BINGO! 🏆</button>
   </div>
- 
-<script>
-  const tg = window.Telegram.WebApp;
-  tg.ready(); tg.expand();
-  let socket, userCard=[], markedNumbers=[], isGameActive=false, lobbyTimerInterval=null, selectedCardNumber=null;
-  let adminPhone = '0924839730';   // <-- GLOBAL fallback, accessible everywhere
 
-  const lobbyPage=document.getElementById('lobbyPage'), gamePage=document.getElementById('gamePage'), lobbyTimerEl=document.getElementById('lobbyTimer');
-  const playersCountEl=document.getElementById('playersCount'), lobbyBalanceEl=document.getElementById('lobbyBalance'), gameBalanceEl=document.getElementById('gameBalance');
-  const currentCallEl=document.getElementById('currentCall'), calledListEl=document.getElementById('calledList'), selectedNumberEl=document.getElementById('selectedNumber');
-  const numberGrid=document.getElementById('numberGrid'), lobbyCardPreview=document.getElementById('lobbyCardPreview');
-  let takenNumbers=new Set();
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready(); tg.expand();
+    let socket, userCard=[], markedNumbers=[], isGameActive=false, lobbyTimerInterval=null, selectedCardNumber=null;
+    let adminPhone = '0924839730';   // fallback, updated from server
 
-  function renderCard(card,id,clickable=false){
-    const cont=document.getElementById(id); cont.innerHTML='';
-    const table=document.createElement('table');
-    for(let r=0;r<5;r++){ const tr=document.createElement('tr');
-      for(let c=0;c<5;c++){ const val=card[r][c]; const td=document.createElement('td'); td.textContent=val;
-        if(val==='FREE')td.classList.add('free');
-        if(markedNumbers.includes(val))td.classList.add('marked');
-        if(clickable&&val!=='FREE'){ td.style.cursor='pointer'; td.onclick=()=>{if(!isGameActive)return;socket.emit('markNumber',val);}; }
-        tr.appendChild(td);
-      } table.appendChild(tr);
-    } cont.appendChild(table);
-  }
-  function showLobby(time){ lobbyPage.classList.remove('hidden'); gamePage.classList.add('hidden'); isGameActive=false; startTimer(time||30); if(socket)socket.emit('getBalance'); }
-  function showGame(){ lobbyPage.classList.add('hidden'); gamePage.classList.remove('hidden'); isGameActive=true; clearInterval(lobbyTimerInterval); if(socket)socket.emit('getBalance'); }
-  function startTimer(s){ let left=s; lobbyTimerEl.textContent=left+'s'; clearInterval(lobbyTimerInterval); lobbyTimerInterval=setInterval(()=>{ left--; if(left<=0){clearInterval(lobbyTimerInterval);showGame();}else lobbyTimerEl.textContent=left+'s'; },1000); }
-  function buildNumberGrid(){ numberGrid.innerHTML='';
-    for(let i=1;i<=100;i++){ const cell=document.createElement('div'); cell.className='grid-cell'; cell.dataset.number=i; cell.textContent=i;
-      if(takenNumbers.has(i))cell.classList.add('taken');
-      else cell.onclick=()=>{if(isGameActive||takenNumbers.has(i))return; if(!socket){alert('Not connected');return;} socket.emit('selectCardNumber',i);};
-      numberGrid.appendChild(cell);
+    const lobbyPage=document.getElementById('lobbyPage'), gamePage=document.getElementById('gamePage'), lobbyTimerEl=document.getElementById('lobbyTimer');
+    const playersCountEl=document.getElementById('playersCount'), lobbyBalanceEl=document.getElementById('lobbyBalance'), gameBalanceEl=document.getElementById('gameBalance');
+    const currentCallEl=document.getElementById('currentCall'), calledListEl=document.getElementById('calledList'), selectedNumberEl=document.getElementById('selectedNumber');
+    const numberGrid=document.getElementById('numberGrid'), lobbyCardPreview=document.getElementById('lobbyCardPreview');
+    let takenNumbers=new Set();
+
+    function renderCard(card, id, clickable=false) {
+      const cont=document.getElementById(id); 
+      if(!cont) return;
+      cont.innerHTML='';
+      const table=document.createElement('table');
+      for(let r=0; r<5; r++) { 
+        const tr=document.createElement('tr');
+        for(let c=0; c<5; c++) { 
+          const val=card[r][c]; 
+          const td=document.createElement('td'); 
+          td.textContent=val;
+          if(val==='FREE') td.classList.add('free');
+          if(markedNumbers.includes(val)) td.classList.add('marked');
+          if(clickable && val!=='FREE') { 
+            td.style.cursor='pointer'; 
+            td.onclick=(e)=>{ e.stopPropagation(); if(!isGameActive) return; socket.emit('markNumber', val); };
+          }
+          tr.appendChild(td);
+        } 
+        table.appendChild(tr);
+      } 
+      cont.appendChild(table);
     }
-    if(selectedCardNumber){ const sel=numberGrid.querySelector(`[data-number='${selectedCardNumber}']`); if(sel)sel.classList.add('selected'); }
-  }
-  function updateGridWithTakenNumbers(nums){ takenNumbers=new Set(nums); buildNumberGrid(); }
 
-  async function connect(){
-    const initData=tg.initData; if(!initData){alert('Open inside Telegram');return;}
-    try{
-      const res=await fetch('/api/telegram-miniapp-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData})});
-      const data=await res.json();
-      if(!data.success){alert('Auth failed: '+(data.error||''));return;}
-    }catch(e){alert('Fetch error: '+e.message);return;}
+    function showLobby(time) { 
+      lobbyPage.classList.remove('hidden'); 
+      gamePage.classList.add('hidden'); 
+      isGameActive=false; 
+      if(socket) socket.emit('getBalance');
+      startTimer(time || 30);
+      // refresh preview card if any
+      if(userCard.length) renderCard(userCard, 'lobbyCardPreview', false);
+    }
 
-    socket=io();
+    function showGame() { 
+      lobbyPage.classList.add('hidden'); 
+      gamePage.classList.remove('hidden'); 
+      isGameActive=true; 
+      clearInterval(lobbyTimerInterval); 
+      if(socket) socket.emit('getBalance');
+      if(userCard.length) renderCard(userCard, 'gameCard', true);
+    }
 
-    socket.on('connect',()=>{socket.emit('joinLobby');});
-    socket.on('balanceUpdate',b=>{lobbyBalanceEl.textContent=b;gameBalanceEl.textContent=b;});
-    socket.on('lobbyState',state=>{showLobby(state.startsIn); if(state.takenNumbers)updateGridWithTakenNumbers(state.takenNumbers);});
-    socket.on('yourCard',card=>{userCard=card; if(isGameActive)renderCard(card,'gameCard',true); else renderCard(card,'lobbyCardPreview');});
-    socket.on('cardTaken',data=>{updateGridWithTakenNumbers(data.takenNumbers);selectedCardNumber=null;selectedNumberEl.textContent='-';});
-    socket.on('cardSelectionFailed',msg=>alert(msg));
-    socket.on('playersCount',c=>playersCountEl.textContent=c);
-    socket.on('gameStarted',showGame);
-    socket.on('numberCalled',data=>{currentCallEl.textContent=data.number;calledListEl.textContent='Called: '+(data.calledNumbers||[]).join(', ');});
-    socket.on('calledNumbers',called=>{calledListEl.textContent='Called: '+called.join(', ');});
-    socket.on('markedNumbers',nums=>{markedNumbers=nums; if(isGameActive&&userCard.length)renderCard(userCard,'gameCard',true);});
-    socket.on('gameEnded',data=>{isGameActive=false;alert(data.winner?'🎉 Winner: '+data.winner:'Game ended with no winner');});
-    socket.on('invalidBingo',()=>alert('❌ Not a valid bingo yet!'));
-    socket.on('connect_error',err=>alert('Socket error: '+err.message));
+    function startTimer(s) { 
+      let left=s; 
+      lobbyTimerEl.textContent=left+'s'; 
+      clearInterval(lobbyTimerInterval); 
+      lobbyTimerInterval=setInterval(()=>{ 
+        left--; 
+        if(left<=0){clearInterval(lobbyTimerInterval); showGame();}
+        else lobbyTimerEl.textContent=left+'s'; 
+      }, 1000); 
+    }
 
-    // Update the global adminPhone variable from server
-    fetch('/api/admin-phone')
+    function buildNumberGrid() { 
+      numberGrid.innerHTML='';
+      for(let i=1;i<=100;i++) { 
+        const cell=document.createElement('div'); 
+        cell.className='grid-cell'; 
+        cell.dataset.number=i; 
+        cell.textContent=i;
+        if(takenNumbers.has(i)) cell.classList.add('taken');
+        else cell.onclick=()=>{ if(isGameActive || takenNumbers.has(i)) return; if(!socket){alert('Not connected'); return;} socket.emit('selectCardNumber', i); };
+        numberGrid.appendChild(cell);
+      }
+      if(selectedCardNumber){ 
+        const sel=numberGrid.querySelector(`[data-number='${selectedCardNumber}']`); 
+        if(sel) sel.classList.add('selected'); 
+      }
+    }
+
+    function updateGridWithTakenNumbers(nums) { 
+      takenNumbers=new Set(nums); 
+      buildNumberGrid(); 
+    }
+
+    // add pulse effect on new call
+    function animateCall() {
+      const callDiv = document.getElementById('currentCall');
+      if(callDiv) {
+        callDiv.classList.add('bingo-pulse');
+        setTimeout(() => callDiv.classList.remove('bingo-pulse'), 400);
+      }
+    }
+
+    async function connect(){
+      const initData=tg.initData; 
+      if(!initData){ alert('❗ Open inside Telegram'); return; }
+      try{
+        const res=await fetch('/api/telegram-miniapp-auth',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({initData})});
+        const data=await res.json();
+        if(!data.success){ alert('Auth failed: '+(data.error||'')); return; }
+      } catch(e){ alert('Fetch error: '+e.message); return; }
+
+      socket=io();
+      socket.on('connect',()=>{ socket.emit('joinLobby'); });
+      socket.on('balanceUpdate',b=>{ lobbyBalanceEl.textContent=b; gameBalanceEl.textContent=b; });
+      socket.on('lobbyState',state=>{ 
+        showLobby(state.startsIn); 
+        if(state.takenNumbers) updateGridWithTakenNumbers(state.takenNumbers);
+      });
+      socket.on('yourCard',card=>{ 
+        userCard=card; 
+        if(isGameActive) renderCard(card,'gameCard',true); 
+        else renderCard(card,'lobbyCardPreview',false);
+      });
+      socket.on('cardTaken',data=>{ 
+        updateGridWithTakenNumbers(data.takenNumbers);
+        selectedCardNumber=null; 
+        selectedNumberEl.textContent='-';
+        if(!isGameActive && userCard.length) renderCard(userCard,'lobbyCardPreview',false);
+      });
+      socket.on('cardSelectionFailed',msg=>alert(msg));
+      socket.on('playersCount',c=>playersCountEl.textContent=c);
+      socket.on('gameStarted',()=>{ showGame(); });
+      socket.on('numberCalled',data=>{ 
+        currentCallEl.textContent=data.number; 
+        calledListEl.textContent='Called: '+(data.calledNumbers||[]).join(', ');
+        animateCall();
+      });
+      socket.on('calledNumbers',called=>{ 
+        calledListEl.textContent='Called: '+called.join(', ');
+      });
+      socket.on('markedNumbers',nums=>{ 
+        markedNumbers=nums; 
+        if(isGameActive && userCard.length) renderCard(userCard,'gameCard',true);
+        else if(!isGameActive && userCard.length) renderCard(userCard,'lobbyCardPreview',false);
+      });
+      socket.on('gameEnded',data=>{ 
+        isGameActive=false; 
+        alert(data.winner?'🏆 WINNER: '+data.winner:'Game ended no winner');
+        if(socket) socket.emit('getBalance');
+        // after game end, server will broadcast lobby state eventually
+      });
+      socket.on('invalidBingo',()=>alert('❌ Bingo not valid yet! Keep marking.'));
+      socket.on('connect_error',err=>alert('Socket error: '+err.message));
+
+      fetch('/api/admin-phone')
+        .then(res => res.json())
+        .then(data => { adminPhone = data.phone; })
+        .catch(()=>{});
+
+      socket.on('depositStatus', (data) => {
+        if (data.status === 'approved') alert(`✅ Deposit approved! +${data.amount}`);
+        else if (data.status === 'rejected') alert('❌ Deposit rejected.');
+      });
+      socket.on('withdrawStatus', (data) => {
+        if (data.status === 'approved') alert(`✅ Withdrawal approved! -${data.amount}`);
+        else if (data.status === 'rejected') alert('❌ Withdrawal rejected.');
+      });
+    }
+
+    // Deposit with adminPhone
+    document.getElementById('depositBtn').onclick = () => {
+      if (!socket) { alert('Not connected'); return; }
+      alert(`📞 Admin TeleBirr: ${adminPhone}\nSend payment to this number, then enter amount.`);
+      const amountStr = prompt('Deposit amount (ETB):');
+      if (!amountStr) return;
+      const amount = parseFloat(amountStr);
+      if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
+      fetch('/api/request-deposit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount })
+      })
       .then(res => res.json())
-      .then(data => { adminPhone = data.phone; })
-      .catch(() => {});   // keep fallback if network error
+      .then(data => { alert(data.error || data.message); })
+      .catch(err => alert('Network: ' + err.message));
+    };
 
-    // Deposit / Withdraw status listeners
-    socket.on('depositStatus', (data) => {
-      if (data.status === 'approved') alert(`✅ Deposit approved! +${data.amount}`);
-      else if (data.status === 'rejected') alert('❌ Deposit rejected.');
-    });
-    socket.on('withdrawStatus', (data) => {
-      if (data.status === 'approved') alert(`✅ Withdrawal approved! -${data.amount}`);
-      else if (data.status === 'rejected') alert('❌ Withdrawal rejected.');
-    });
-  }
+    document.getElementById('withdrawBtn').onclick = () => {
+      if (!socket) { alert('Not connected'); return; }
+      const phone = prompt('📱 Ethio telecom phone (09xxxxxxxx):');
+      if (!phone) return;
+      if (!/^0\d{9}$/.test(phone)) { alert('Invalid format. Use 09xxxxxxxx'); return; }
+      const amountStr = prompt('Withdraw amount (ETB):');
+      if (!amountStr) return;
+      const amount = parseFloat(amountStr);
+      if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
+      fetch('/api/request-withdraw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, phone })
+      })
+      .then(res => res.json())
+      .then(data => { alert(data.error || data.message); })
+      .catch(err => alert('Network: ' + err.message));
+    };
 
-  // ---- Deposit (works because adminPhone is global) ----
-  document.getElementById('depositBtn').onclick = () => {
-    if (!socket) { alert('Not connected'); return; }
-    alert(`Admin phone: ${adminPhone}\nPlease send your payment to this number by TeleBirr, then enter the amount below.`);
-    const amountStr = prompt('Enter amount to deposit:');
-    if (!amountStr) return;
-    const amount = parseFloat(amountStr);
-    if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
-    fetch('/api/request-deposit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount })
-    })
-    .then(res => res.json())
-    .then(data => { alert(data.error || data.message); })
-    .catch(err => alert('Network error: ' + err.message));
-  };
+    document.getElementById('randomCardBtn').onclick = () => { if(!isGameActive && socket) socket.emit('newCardNumber'); };
+    document.getElementById('bingoBtn').onclick = () => { if(socket) socket.emit('claimBingo'); };
 
-  // ---- Withdraw (with phone prompt) ----
-  document.getElementById('withdrawBtn').onclick = () => {
-    if (!socket) { alert('Not connected'); return; }
-    const phone = prompt('Enter your Ethio telecom phone number (e.g. 09*******0):');
-    if (!phone) return;
-    if (!/^0\d{9}$/.test(phone)) { alert('Invalid phone number'); return; }
-    const amountStr = prompt('Enter amount to withdraw:');
-    if (!amountStr) return;
-    const amount = parseFloat(amountStr);
-    if (isNaN(amount) || amount <= 0) { alert('Invalid amount'); return; }
-    fetch('/api/request-withdraw', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount, phone })
-    })
-    .then(res => res.json())
-    .then(data => { alert(data.error || data.message); })
-    .catch(err => alert('Network error: ' + err.message));
-  };
-
-  document.getElementById('randomCardBtn').onclick=()=>{if(isGameActive||!socket)return;socket.emit('newCardNumber');};
-  document.getElementById('bingoBtn').onclick=()=>{if(socket)socket.emit('claimBingo');};
-
-  buildNumberGrid();
-  connect();
-</script> 
+    // initial render of grid placeholder then connect
+    buildNumberGrid();
+    connect();
+  </script>
 </body>
 </html>
