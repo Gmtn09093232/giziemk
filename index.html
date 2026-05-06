@@ -133,8 +133,6 @@ fetch('/api/admin-phone')
         else if (data.status === 'rejected') alert('❌ Withdrawal rejected.');
       });
     }
-
-    // Deposit / Withdraw button actions (these can stay outside)
     // ---- Deposit ----
 document.getElementById('depositBtn').onclick = () => {
   if (!socket) { alert('Not connected'); return; }
