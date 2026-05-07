@@ -433,20 +433,58 @@
     const closeModalBtn = document.getElementById('closeModalBtn');
 
     // --- Helper functions (renderCard, showLobby, etc.) ---
-    function renderCard(card, id, clickable=false) {
-      const cont=document.getElementById(id); if(!cont) return;
-      cont.innerHTML='';
-      const table=document.createElement('table');
-      for(let r=0;r<5;r++){ const tr=document.createElement('tr');
-        for(let c=0;c<5;c++){ const val=card[r][c]; const td=document.createElement('td'); td.textContent=val;
-          if(val==='FREE') td.classList.add('free');
-          if(markedNumbers.includes(val)) td.classList.add('marked');
-          if(clickable && val!=='FREE'){ td.style.cursor='pointer'; td.onclick=()=>{ if(isGameActive) socket.emit('markNumber', val); }; }
-          tr.appendChild(td);
-        } table.appendChild(tr);
-      } cont.appendChild(table);
-    }
+  function renderCard(card, id, clickable = false) {
+  const cont = document.getElementById(id);
+  if (!cont) return;
+  cont.innerHTML = '';
+  const table = document.createElement('table');
 
+  // ----- ADD HEADER ROW WITH B I N G O -----
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  const letters = ['B', 'I', 'N', 'G', 'O'];
+  for (let i = 0; i < 5; i++) {
+    const th = document.createElement('th');
+    th.textContent = letters[i];
+    th.style.fontSize = '1.3rem';
+    th.style.fontWeight = '800';
+    th.style.background = 'linear-gradient(145deg, #f39c12, #e67e22)';
+    th.style.webkitBackgroundClip = 'text';
+    th.style.backgroundClip = 'text';
+    th.style.color = '#f7b32b';
+    th.style.padding = '8px 0';
+    th.style.textShadow = '0 0 4px #000';
+    th.style.borderRadius = '12px';
+    headerRow.appendChild(th);
+  }
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  // ----- BODY OF THE CARD (5x5) -----
+  const tbody = document.createElement('tbody');
+  for (let r = 0; r < 5; r++) {
+    const tr = document.createElement('tr');
+    for (let c = 0; c < 5; c++) {
+      const val = card[r][c];
+      const td = document.createElement('td');
+      td.textContent = val;
+      if (val === 'FREE') td.classList.add('free');
+      if (markedNumbers.includes(val)) td.classList.add('marked');
+      if (clickable && val !== 'FREE') {
+        td.style.cursor = 'pointer';
+        td.onclick = (e) => {
+          e.stopPropagation();
+          if (!isGameActive) return;
+          socket.emit('markNumber', val);
+        };
+      }
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  cont.appendChild(table);
+}
     function showLobby(time){ 
       lobbyPage.classList.remove('hidden'); gamePage.classList.add('hidden'); isGameActive=false; 
       if(socket) socket.emit('getBalance');
