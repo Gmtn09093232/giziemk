@@ -195,7 +195,7 @@ function startGame() { /* unchanged */
       supabase.from('users').update({ balance: user.balance }).eq('telegram_id', p.telegramId).then();
     }
   }
-  currentGame.prizePool = 0.8*currentGame.entryFee * currentGame.players.length;
+ currentGame.prizePool = 0.8 * (currentGame.entryFee * currentGame.players.length);
   currentGame.status = 'running';
   currentGame.calledNumbers = [];
   io.emit('gameStarted');
