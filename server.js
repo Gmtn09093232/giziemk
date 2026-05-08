@@ -130,7 +130,7 @@ app.post('/admin/add-balance', async (req, res) => {
   res.json({ success: true, newBalance: user.balance });
 });
 
-// ------------------- Bingo card generator (unchanged) -------------------
+// ------------------- Bingo card generator -------------------
 function generateCard() {
   const columns = [
     [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],
@@ -154,7 +154,7 @@ function generateCard() {
   return transposed;
 }
 
-// ------------------- Game state (unchanged) -------------------
+// ------------------- Game state -------------------
 const currentGame = {
   status: 'lobby',
   players: [],
@@ -168,7 +168,7 @@ const currentGame = {
   cardSet: Array.from({ length: 100 }, () => generateCard())
 };
 
-function resetGame() { /* same as original */ 
+function resetGame() {
   clearInterval(currentGame.callInterval);
   clearTimeout(currentGame.lobbyTimer);
   currentGame.status = 'lobby';
@@ -182,27 +182,57 @@ function resetGame() { /* same as original */
   currentGame.lobbyTimer = setTimeout(() => startGame(), 30000);
 }
 
-function startGame() { /* unchanged */ 
+async function startGame() {
+  // ----- NEW: Remove players with insufficient balance before game starts -----
+  const toRemove = [];
+  for (const p of currentGame.players) {
+    const user = users[p.telegramId];
+    if (!user || user.balance < currentGame.entryFee) {
+      toRemove.push(p);
+    }
+  }
+  if (toRemove.length > 0) {
+    for (const p of toRemove) {
+      const idx = currentGame.players.findIndex(player => player.telegramId === p.telegramId);
+      if (idx !== -1) currentGame.players.splice(idx, 1);
+      if (p.cardNumber) currentGame.takenCardNumbers.delete(p.cardNumber);
+    }
+    // Broadcast updated taken numbers & player count
+    io.emit('cardTaken', { takenNumbers: Array.from(currentGame.takenCardNumbers) });
+    io.emit('playersCount', currentGame.players.length);
+  }
+
   if (currentGame.players.length === 0) {
     currentGame.status = 'ended';
     setTimeout(resetGame, 3000);
     return;
   }
+
+  // Deduct entry fee from all remaining players
   for (const p of currentGame.players) {
     const user = users[p.telegramId];
     if (user) {
       user.balance -= currentGame.entryFee;
-      supabase.from('users').update({ balance: user.balance }).eq('telegram_id', p.telegramId).then();
+      await supabase.from('users').update({ balance: user.balance }).eq('telegram_id', p.telegramId);
+      // Notify each player about their new balance
+      const socket = await getSocketByUserId(p.telegramId);
+      if (socket) socket.emit('balanceUpdate', user.balance);
     }
   }
- currentGame.prizePool = 0.8 * (currentGame.entryFee * currentGame.players.length);
+  currentGame.prizePool = 0.8 * (currentGame.entryFee * currentGame.players.length);
   currentGame.status = 'running';
   currentGame.calledNumbers = [];
   io.emit('gameStarted');
   startCalling();
 }
 
-function startCalling() { /* unchanged */ 
+// Helper to find a socket by userId
+async function getSocketByUserId(userId) {
+  const sockets = await io.fetchSockets();
+  return sockets.find(s => s.userId === userId);
+}
+
+function startCalling() {
   currentGame.callInterval = setInterval(() => {
     if (currentGame.status !== 'running') { clearInterval(currentGame.callInterval); return; }
     const allNums = Array.from({ length: 75 }, (_, i) => i + 1);
@@ -214,7 +244,7 @@ function startCalling() { /* unchanged */
   }, 4000);
 }
 
-function checkBingo(card, marked) { /* unchanged */ 
+function checkBingo(card, marked) {
   const c = card.map(row => row.map(cell => cell === 'FREE' ? 'FREE' : cell));
   for (let r = 0; r < 5; r++) if (c[r].every(v => v === 'FREE' || marked.includes(v))) return true;
   for (let col = 0; col < 5; col++) if ([0,1,2,3,4].every(r => c[r][col] === 'FREE' || marked.includes(c[r][col]))) return true;
@@ -225,7 +255,7 @@ function checkBingo(card, marked) { /* unchanged */
   return false;
 }
 
-function endGame(winnerTelegramId) { /* unchanged */ 
+function endGame(winnerTelegramId) {
   currentGame.status = 'ended';
   clearInterval(currentGame.callInterval);
   if (winnerTelegramId) {
@@ -233,6 +263,7 @@ function endGame(winnerTelegramId) { /* unchanged */
     if (winner && users[winner.telegramId]) {
       users[winner.telegramId].balance += currentGame.prizePool;
       supabase.from('users').update({ balance: users[winner.telegramId].balance }).eq('telegram_id', winner.telegramId).then();
+      io.emit('balanceUpdate', users[winner.telegramId].balance);
     }
     io.emit('gameEnded', { winner: winner ? winner.username : 'Unknown' });
   } else io.emit('gameEnded', { noWinner: true });
@@ -256,7 +287,7 @@ app.post('/api/request-deposit', upload.single('proof'), async (req, res) => {
   const user = await loadUser(userId, null);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const proofPath = `/uploads/${file.filename}`; // relative URL to serve
+  const proofPath = `/uploads/${file.filename}`;
 
   const { data, error } = await supabase
     .from('deposit_requests')
@@ -327,7 +358,7 @@ app.post('/admin/process-deposit', async (req, res) => {
   }
 });
 
-// ------------------- WITHDRAWAL (improved response) -------------------
+// ------------------- WITHDRAWAL -------------------
 app.post('/api/request-withdraw', async (req, res) => {
   const userId = req.session?.userId;
   if (!userId) return res.status(401).json({ error: 'Not logged in' });
@@ -349,7 +380,6 @@ app.post('/api/request-withdraw', async (req, res) => {
     .single();
 
   if (error) { console.error('Withdraw insert error:', error.message); return res.status(500).json({ error: 'Internal error' }); }
-  // ✅ Now returns amount in the message
   res.json({ success: true, requestId: data.id, message: `Withdrawal request of ${amt} ETB to ${phone} submitted.` });
 });
 
@@ -399,7 +429,7 @@ app.post('/admin/process-withdrawal', async (req, res) => {
   }
 });
 
-// ------------------- Socket.IO auth & events (unchanged) -------------------
+// ------------------- Socket.IO with Balance Check on Join -------------------
 io.use((socket, next) => {
   if (!socket.request.session?.userId) return next(new Error('Unauthorized'));
   socket.userId = socket.request.session.userId;
@@ -422,8 +452,17 @@ io.on('connection', async (socket) => {
     }
   }
 
-  socket.on('selectCardNumber', (cardNumber) => { /* unchanged */ 
+  // Select a specific card number (only allowed if balance >= entryFee)
+  socket.on('selectCardNumber', (cardNumber) => {
     if (currentGame.status !== 'lobby') return;
+    
+    // ----- BALANCE CHECK -----
+    const userBalance = users[socket.userId]?.balance || 0;
+    if (userBalance < currentGame.entryFee) {
+      socket.emit('cardSelectionFailed', `Insufficient balance to join. Need ${currentGame.entryFee} birr.`);
+      return;
+    }
+
     const num = Number(cardNumber);
     if (!Number.isInteger(num) || num < 1 || num > 100) return;
     if (currentGame.takenCardNumbers.has(num)) {
@@ -443,8 +482,17 @@ io.on('connection', async (socket) => {
     socket.emit('yourCard', player.card);
   });
 
-  socket.on('newCardNumber', () => { /* unchanged */ 
+  // Get a random free card number (only allowed if balance >= entryFee)
+  socket.on('newCardNumber', () => {
     if (currentGame.status !== 'lobby') return;
+    
+    // ----- BALANCE CHECK -----
+    const userBalance = users[socket.userId]?.balance || 0;
+    if (userBalance < currentGame.entryFee) {
+      socket.emit('cardSelectionFailed', `Insufficient balance to join. Need ${currentGame.entryFee} birr.`);
+      return;
+    }
+
     const freeNumbers = [];
     for (let i = 1; i <= 100; i++) if (!currentGame.takenCardNumbers.has(i)) freeNumbers.push(i);
     if (freeNumbers.length === 0) { socket.emit('cardSelectionFailed', 'All numbers are taken.'); return; }
@@ -462,7 +510,7 @@ io.on('connection', async (socket) => {
     socket.emit('yourCard', player.card);
   });
 
-  socket.on('markNumber', (number) => { /* unchanged */ 
+  socket.on('markNumber', (number) => {
     if (currentGame.status !== 'running') return;
     const player = currentGame.players.find(p => p.telegramId === socket.userId);
     if (!player) return;
@@ -476,7 +524,7 @@ io.on('connection', async (socket) => {
     socket.emit('markedNumbers', player.markedNumbers);
   });
 
-  socket.on('claimBingo', () => { /* unchanged */ 
+  socket.on('claimBingo', () => {
     if (currentGame.status !== 'running') return;
     const player = currentGame.players.find(p => p.telegramId === socket.userId);
     if (!player) return;
