@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-  <title>✨ Nebula Bingo — Deposit with Proof</title>
+  <title>✨ Nebula Bingo</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
@@ -358,7 +358,7 @@
   <!-- Deposit Modal -->
   <div id="depositModal" class="modal">
     <div class="modal-content">
-      <h3>📸 Deposit with Proof</h3>
+      <h3>📸 Deposit by Telebirr 0924839730</h3>
       <input type="tel" id="depositPhone" placeholder="Your Ethio telecom phone (09xxxxxxxx)" required>
       <label class="file-label" for="proofImage">📎 Attach payment screenshot</label>
       <input type="file" id="proofImage" accept="image/*" capture="environment">
@@ -606,7 +606,7 @@ function formatCall(num) {
     // --- Improved Withdrawal (shows amount clearly) ---
     function handleWithdraw() {
       if (!socket) { alert('Not connected'); return; }
-      const phone = prompt('📱 Ethio telecom phone number (09xxxxxxxx):');
+      const phone = prompt('📱 Ethio telecom yrou phone number (09xxxxxxxx):');
       if (!phone) return;
       if (!/^0\d{9}$/.test(phone)) { alert('Invalid phone number'); return; }
       const amountStr = prompt('💰 Withdraw amount (ETB):');
