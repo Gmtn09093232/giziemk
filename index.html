@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-  <title>✨ Nebula Bingo </title>
+  <title>✨ Nebula Bingo — Deposit with Proof</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
@@ -178,7 +178,7 @@
     }
 
     .players-badge {
-      background: #1e2a3a;
+      background: #fcfdfd;
       padding: 6px 16px;
       border-radius: 60px;
       font-weight: 500;
@@ -358,7 +358,7 @@
   <!-- Deposit Modal -->
   <div id="depositModal" class="modal">
     <div class="modal-content">
-      <h3>📸 Deposit to TeleBirr 0924839730 </h3>
+      <h3>📸 Deposit with Proof</h3>
       <input type="tel" id="depositPhone" placeholder="Your Ethio telecom phone (09xxxxxxxx)" required>
       <label class="file-label" for="proofImage">📎 Attach payment screenshot</label>
       <input type="file" id="proofImage" accept="image/*" capture="environment">
@@ -388,8 +388,9 @@
     </div>
     <div class="selection-row" style="display: flex; justify-content: space-between; margin: 10px 0;">
       <span>🎯 Pick card ID:</span>
-      <span>Selected: <span id="selectedNumber">-</span></span>
+      <div class="selected-number-badge">🎴 Selected: <span id="selectedNumber">-</span></div>
       <button id="randomCardBtn">✨ Random Card</button>
+      
     </div>
     <div id="numberGrid" class="grid-100"></div>
     <div style="margin-top: 8px;">🎴 Your card preview</div>
@@ -398,9 +399,43 @@
 
   <div id="gamePage" class="page hidden">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-      <h2>⚡ LIVE BINGO</h2>
-      <div class="balance-box"><span>💰</span><b id="gameBalance">0</b></div>
+  <h2>⚡ LIVE BINGO</h2>
+
+  <div style="display:flex; gap:10px; align-items:center;">
+
+    <div class="players-badge">
+      👥 <span id="gamePlayersCount">0</span>
     </div>
+
+    <div class="balance-box">
+      <span>💰</span>
+      <b id="gameBalance">0</b>
+    </div>
+
+  </div>
+</div>
+
+<!-- Winning Prize Box -->
+<div style="
+  background: rgba(0,0,0,0.45);
+  border: 1px solid rgba(243,156,18,0.35);
+  border-radius: 30px;
+  padding: 12px 18px;
+  margin-bottom: 14px;
+  text-align:center;
+  color:#ffd966;
+  font-weight:700;
+  font-size:1.1rem;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+">
+  🏆 Winning Prize:
+  <span id="winningBalance" style="
+    color:#f7b32b;
+    font-size:1.3rem;
+    margin-left:6px;
+  ">0</span>
+  ETB
+</div>
     <div class="call-hero">
       <div style="font-size: 0.8rem;">🎲 LAST CALL</div>
       <div id="currentCall">-</div>
@@ -419,7 +454,10 @@
     // DOM elements
     const lobbyPage=document.getElementById('lobbyPage'), gamePage=document.getElementById('gamePage');
     const lobbyTimerEl=document.getElementById('lobbyTimer'), playersCountEl=document.getElementById('playersCount');
-    const lobbyBalanceEl=document.getElementById('lobbyBalance'), gameBalanceEl=document.getElementById('gameBalance');
+    const lobbyBalanceEl=document.getElementById('lobbyBalance'),
+gameBalanceEl=document.getElementById('gameBalance'),
+gamePlayersCountEl=document.getElementById('gamePlayersCount'),
+winningBalanceEl=document.getElementById('winningBalance');
     const currentCallEl=document.getElementById('currentCall'), calledListEl=document.getElementById('calledList');
     const selectedNumberEl=document.getElementById('selectedNumber'), numberGrid=document.getElementById('numberGrid');
     const lobbyCardPreview=document.getElementById('lobbyCardPreview');
@@ -512,7 +550,7 @@
     }
     function updateGridWithTakenNumbers(nums){ takenNumbers=new Set(nums); buildNumberGrid(); }
 
-// Helper: get BINGO letter from number
+    // Helper: get BINGO letter from number
 function getBingoLetter(num) {
   if (num >= 1 && num <= 15) return 'B';
   if (num >= 16 && num <= 30) return 'I';
@@ -524,7 +562,7 @@ function getBingoLetter(num) {
 function formatCall(num) {
   return `${getBingoLetter(num)}-${num}`;
 }
-    
+
     // --- Deposit with phone + image (FormData) ---
     function showDepositModal() {
       depositPhoneInput.value = '';
@@ -603,7 +641,20 @@ function formatCall(num) {
       socket.on('yourCard',card=>{ userCard=card; if(isGameActive) renderCard(card,'gameCard',true); else renderCard(card,'lobbyCardPreview',false); });
       socket.on('cardTaken',data=>{ updateGridWithTakenNumbers(data.takenNumbers); selectedCardNumber=null; selectedNumberEl.textContent='-'; });
       socket.on('cardSelectionFailed',msg=>alert(msg));
-      socket.on('playersCount',c=>playersCountEl.textContent=c);
+      socket.on('playersCount', c => {
+  playersCountEl.textContent = c;
+
+  if (gamePlayersCountEl) {
+    gamePlayersCountEl.textContent = c;
+  }
+
+  // Example winning calculation
+ const entryFee = 10; // ETB per player
+const totalPool = c * entryFee;
+const prize = Math.floor(totalPool * 0.8);
+
+winningBalanceEl.textContent = prize;
+});
       socket.on('gameStarted',showGame);
       socket.on('numberCalled', data => {
   const formatted = formatCall(data.number);
