@@ -296,7 +296,7 @@ app.post('/api/request-deposit', upload.single('proof'), async (req, res) => {
       username: user.username,
       amount: amt,
       status: 'pending',
-      entity: phone,
+      phone: phone,
       proof_path: proofPath
     })
     .select()
