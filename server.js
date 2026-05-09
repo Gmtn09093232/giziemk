@@ -254,34 +254,65 @@ function checkBingo(card, marked) {
   if (corners.every(v => v === 'FREE' || marked.includes(v))) return true;
   return false;
 }
-  function endGame(winnerTelegramId, isLate = false) {
+
+  async function endGame(winnerTelegramId, isLate = false) {
   currentGame.status = 'ended';
   clearInterval(currentGame.callInterval);
+
   if (winnerTelegramId) {
-    const winner = currentGame.players.find(p => p.telegramId === winnerTelegramId);
+    const winner = currentGame.players.find(
+      p => p.telegramId === winnerTelegramId
+    );
+
     if (winner && users[winner.telegramId]) {
+
+      // Add prize
       users[winner.telegramId].balance += currentGame.prizePool;
-      supabase
+
+      // Save to Supabase
+      await supabase
         .from('users')
-        .update({ balance: users[winner.telegramId].balance })
-        .eq('telegram_id', winner.telegramId)
-        .then();
-      // Notify the winner of new balance
-      const winnerSocket = // Find the socket for the winner
-        io.fetchSockets().then(sockets => sockets.find(s => s.userId === winner.telegramId));
-     if (winnerSocket && users[winner?.telegramId]) {
-  winnerSocket.emit(
-    'balanceUpdate',
-    users[winner.telegramId].balance
-  );
-}
-      // Also emit globally so UI can refresh
-      io.emit('balanceUpdate', users[winner.telegramId].balance);
+        .update({
+          balance: users[winner.telegramId].balance
+        })
+        .eq('telegram_id', winner.telegramId);
+
+      // Find winner socket correctly
+      const sockets = await io.fetchSockets();
+
+      const winnerSocket = sockets.find(
+        s => s.userId === winner.telegramId
+      );
+
+      // Send updated balance
+      if (winnerSocket) {
+        winnerSocket.emit(
+          'balanceUpdate',
+          users[winner.telegramId].balance
+        );
+      }
+
+      // Notify everyone
+      io.emit('gameEnded', {
+        winner: winner.username,
+        late: isLate
+      });
+
+    } else {
+      io.emit('gameEnded', {
+        winner: 'Unknown',
+        late: isLate
+      });
     }
-    io.emit('gameEnded', { winner: winner ? winner.username : 'Unknown', late: isLate });
+
   } else {
-    io.emit('gameEnded', { noWinner: true });
+
+    io.emit('gameEnded', {
+      noWinner: true
+    });
+
   }
+
   setTimeout(resetGame, 5000);
 }
 // ------------------- DEPOSIT (with phone + proof image) -------------------
