@@ -254,8 +254,7 @@ function checkBingo(card, marked) {
   if (corners.every(v => v === 'FREE' || marked.includes(v))) return true;
   return false;
 }
-
-function endGame(winnerTelegramId, isLate = false) {
+  function endGame(winnerTelegramId, isLate = false) {
   currentGame.status = 'ended';
   clearInterval(currentGame.callInterval);
   if (winnerTelegramId) {
@@ -280,7 +279,6 @@ function endGame(winnerTelegramId, isLate = false) {
   }
   setTimeout(resetGame, 5000);
 }
-
 // ------------------- DEPOSIT (with phone + proof image) -------------------
 app.post('/api/request-deposit', upload.single('proof'), async (req, res) => {
   const userId = req.session?.userId;
