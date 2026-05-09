@@ -269,11 +269,7 @@ function checkBingo(card, marked) {
       // Notify the winner of new balance
       const winnerSocket = // Find the socket for the winner
         io.fetchSockets().then(sockets => sockets.find(s => s.userId === winner.telegramId));
-     if (
-  winnerSocket &&
-  winner &&
-  users[winner.telegramId]
-) {
+     if (winnerSocket && users[winner?.telegramId]) {
   winnerSocket.emit(
     'balanceUpdate',
     users[winner.telegramId].balance
