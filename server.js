@@ -536,36 +536,19 @@ io.on('connection', async (socket) => {
     socket.emit('markedNumbers', player.markedNumbers);
   });
 
-  socket.on('claimBingo', () => {
-  if (currentGame.status !== 'running') return;
-  const player = currentGame.players.find(p => p.telegramId === socket.userId);
-  if (!player) return;
+ // --- LATE BINGO check ---
+if (currentGame.calledNumbers.length >= 2) {
+  const latestCalled = currentGame.calledNumbers[currentGame.calledNumbers.length - 1];
 
-  // --- NORMAL bingo check (all current numbers) ---
-  if (checkBingo(player.card, player.markedNumbers)) {
-    endGame(socket.userId, false);  // false = normal win
+  const previousMarked = player.markedNumbers.filter(
+    n => n !== latestCalled
+  );
+
+  if (checkBingo(player.card, previousMarked)) {
+    endGame(socket.userId, true);
     return;
   }
-
-  // --- LATE BINGO check ---
-  // Only possible if at least 2 numbers have been called (there is a "previous" number)
-  if (currentGame.calledNumbers.length >= 2) {
-    const latestCalled = currentGame.calledNumbers[currentGame.calledNumbers.length - 1];
-    // Build a marked set that excludes the most recent number
-    const previousMarked = player.markedNumbers.filter(n => n !== latestCalled);
-
-    if (checkBingo(player.card, previousMarked)) {
-      // The card was a winner on the previous draw
-      // No need to check for another player's win because the game would have ended
-      endGame(socket.userId, true);  // true = late bingo
-      return;
-    }
-  }
-
-  // No bingo at all
-  socket.emit('invalidBingo');
-});
-
+}
   socket.on('getBalance', async () => { const u = await loadUser(socket.userId, socket.username); socket.emit('balanceUpdate', u.balance); });
   socket.on('requestWithdraw', () => { socket.emit('withdrawRequested', 'Withdraw request sent.'); });
 });
