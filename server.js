@@ -535,20 +535,25 @@ io.on('connection', async (socket) => {
     player.markedNumbers.push(number);
     socket.emit('markedNumbers', player.markedNumbers);
   });
+socket.on('claimBingo', () => {
+  if (currentGame.status !== 'running') return;
 
- // --- LATE BINGO check ---
-if (currentGame.calledNumbers.length >= 2) {
-  const latestCalled = currentGame.calledNumbers[currentGame.calledNumbers.length - 1];
-
-  const previousMarked = player.markedNumbers.filter(
-    n => n !== latestCalled
+  const player = currentGame.players.find(
+    p => p.telegramId === socket.userId
   );
 
-  if (checkBingo(player.card, previousMarked)) {
-    endGame(socket.userId, true);
-    return;
+  if (!player) return;
+
+  // STRICT MODE:
+  // Bingo must be claimed before next number call.
+  // Missed bingo becomes invalid automatically.
+
+  if (checkBingo(player.card, player.markedNumbers)) {
+    endGame(socket.userId, false);
+  } else {
+    socket.emit('invalidBingo');
   }
-}
+});
   socket.on('getBalance', async () => { const u = await loadUser(socket.userId, socket.username); socket.emit('balanceUpdate', u.balance); });
   socket.on('requestWithdraw', () => { socket.emit('withdrawRequested', 'Withdraw request sent.'); });
 });
