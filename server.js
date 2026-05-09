@@ -255,7 +255,6 @@ function checkBingo(card, marked) {
   return false;
 }
 
-
 function endGame(winnerTelegramId, isLate = false) {
   currentGame.status = 'ended';
   clearInterval(currentGame.callInterval);
@@ -269,7 +268,7 @@ function endGame(winnerTelegramId, isLate = false) {
         .eq('telegram_id', winner.telegramId)
         .then();
       // Notify the winner of new balance
-     const winnerSocket = // Find the socket for the winner
+      const winnerSocket = // Find the socket for the winner
         io.fetchSockets().then(sockets => sockets.find(s => s.userId === winner.telegramId));
       if (winnerSocket) winnerSocket.emit('balanceUpdate', users[winner.telegramId].balance);
       // Also emit globally so UI can refresh
