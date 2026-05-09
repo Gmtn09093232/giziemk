@@ -255,18 +255,29 @@ function checkBingo(card, marked) {
   return false;
 }
 
-function endGame(winnerTelegramId) {
+
+function endGame(winnerTelegramId, isLate = false) {
   currentGame.status = 'ended';
   clearInterval(currentGame.callInterval);
   if (winnerTelegramId) {
     const winner = currentGame.players.find(p => p.telegramId === winnerTelegramId);
     if (winner && users[winner.telegramId]) {
       users[winner.telegramId].balance += currentGame.prizePool;
-      supabase.from('users').update({ balance: users[winner.telegramId].balance }).eq('telegram_id', winner.telegramId).then();
+      supabase
+        .from('users')
+        .update({ balance: users[winner.telegramId].balance })
+        .eq('telegram_id', winner.telegramId)
+        .then();
+      // Notify the winner of new balance
+      const winnerSocket = 
+      if (winnerSocket) winnerSocket.emit('balanceUpdate', users[winner.telegramId].balance);
+      // Also emit globally so UI can refresh
       io.emit('balanceUpdate', users[winner.telegramId].balance);
     }
-    io.emit('gameEnded', { winner: winner ? winner.username : 'Unknown' });
-  } else io.emit('gameEnded', { noWinner: true });
+    io.emit('gameEnded', { winner: winner ? winner.username : 'Unknown', late: isLate });
+  } else {
+    io.emit('gameEnded', { noWinner: true });
+  }
   setTimeout(resetGame, 5000);
 }
 
@@ -525,15 +536,34 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('claimBingo', () => {
-    if (currentGame.status !== 'running') return;
-    const player = currentGame.players.find(p => p.telegramId === socket.userId);
-    if (!player) return;
-    if (checkBingo(player.card, player.markedNumbers)) {
-      endGame(socket.userId);
-    } else {
-      socket.emit('invalidBingo');
+  if (currentGame.status !== 'running') return;
+  const player = currentGame.players.find(p => p.telegramId === socket.userId);
+  if (!player) return;
+
+  // --- NORMAL bingo check (all current numbers) ---
+  if (checkBingo(player.card, player.markedNumbers)) {
+    endGame(socket.userId, false);  // false = normal win
+    return;
+  }
+
+  // --- LATE BINGO check ---
+  // Only possible if at least 2 numbers have been called (there is a "previous" number)
+  if (currentGame.calledNumbers.length >= 2) {
+    const latestCalled = currentGame.calledNumbers[currentGame.calledNumbers.length - 1];
+    // Build a marked set that excludes the most recent number
+    const previousMarked = player.markedNumbers.filter(n => n !== latestCalled);
+
+    if (checkBingo(player.card, previousMarked)) {
+      // The card was a winner on the previous draw
+      // No need to check for another player's win because the game would have ended
+      endGame(socket.userId, true);  // true = late bingo
+      return;
     }
-  });
+  }
+
+  // No bingo at all
+  socket.emit('invalidBingo');
+});
 
   socket.on('getBalance', async () => { const u = await loadUser(socket.userId, socket.username); socket.emit('balanceUpdate', u.balance); });
   socket.on('requestWithdraw', () => { socket.emit('withdrawRequested', 'Withdraw request sent.'); });
