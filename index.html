@@ -1,932 +1,844 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-  <title>✨ Nebula Bingo</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>✨ DOT BINGO · ዶት ቢንጎ ✨</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
 
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="/socket.io/socket.io.js"></script>
+        body {
+            min-height: 100vh;
+            background: #1a2a2f;
+            background-image: radial-gradient(circle at 25% 40%, rgba(40, 70, 55, 0.6) 2%, transparent 2.5%),
+                              radial-gradient(circle at 70% 85%, rgba(30, 60, 45, 0.5) 1.8%, transparent 2%);
+            background-size: 55px 55px, 70px 70px;
+            font-family: 'Courier New', 'Segoe UI', 'Inter', 'Courier', monospace;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
-  <style>
-    *{
-      margin:0;
-      padding:0;
-      box-sizing:border-box;
-      -webkit-tap-highlight-color:transparent;
-    }
+        .page {
+            max-width: 650px;
+            width: 100%;
+            margin: 0 auto;
+            background: #fef7e0;
+            background-image: linear-gradient(145deg, #fff6e5 0%, #f8ecd8 100%);
+            border-radius: 32px;
+            padding: 16px 18px 24px;
+            box-shadow: 0 20px 35px rgba(0, 0, 0, 0.5), inset 0 1px 3px rgba(255, 248, 210, 0.9);
+            border: 1px solid #e0bc7c;
+        }
 
-    body{
-      min-height:100vh;
-      background:radial-gradient(ellipse at 30% 10%, #0b1120, #03060c);
-      font-family:'Segoe UI','Inter',system-ui,sans-serif;
-      padding:16px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      color:white;
-    }
+        .hidden {
+            display: none !important;
+        }
 
-    .page{
-      max-width:500px;
-      width:100%;
-      background:rgba(18,25,45,.65);
-      backdrop-filter:blur(14px);
-      -webkit-backdrop-filter:blur(14px);
-      border-radius:48px;
-      padding:20px 20px 28px;
-      box-shadow:0 25px 45px rgba(0,0,0,.5);
-      border:1px solid rgba(243,156,18,.25);
-    }
+        /* RETRO BINGO CARD */
+        .card-container {
+            margin: 16px 0 12px;
+            display: flex;
+            justify-content: center;
+            background: #e9dbc8;
+            border-radius: 24px;
+            padding: 12px 6px;
+            box-shadow: inset 0 0 0 2px #f9efdf, 0 10px 18px rgba(0, 0, 0, 0.2);
+            overflow-x: auto;
+        }
 
-    .hidden{
-      display:none !important;
-    }
+        .card-container table {
+            border-collapse: separate;
+            border-spacing: 6px;
+            margin: 0 auto;
+        }
 
-    h2{
-      font-size:1.9rem;
-      font-weight:700;
-      background:linear-gradient(135deg,#ffe6b0,#f39c12);
-      -webkit-background-clip:text;
-      background-clip:text;
-      color:transparent;
-      margin-bottom:12px;
-    }
+        .card-container thead tr th {
+            font-family: 'Impact', 'Courier New', monospace;
+            font-size: 1.6rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            background: #c2410c;
+            background: linear-gradient(145deg, #b8511a, #9b2e0b);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 2px 2px 0 #fccf7c;
+            padding: 6px 0;
+            text-align: center;
+            width: 60px;
+        }
 
-    .info-grid{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:12px;
-      background:rgba(5,12,22,.7);
-      border-radius:60px;
-      padding:8px 16px;
-      margin-bottom:24px;
-      border:1px solid rgba(243,156,18,.3);
-      flex-wrap:wrap;
-    }
+        .card-container td {
+            width: 58px;
+            height: 58px;
+            background: #fffaf0;
+            border-radius: 16px;
+            text-align: center;
+            vertical-align: middle;
+            font-weight: 800;
+            font-size: 1.3rem;
+            font-family: 'Courier New', monospace;
+            color: #2c1c0c;
+            box-shadow: inset 0 1px 3px rgba(90, 50, 20, 0.2), 0 4px 8px rgba(0, 0, 0, 0.15);
+            border: 2px solid #e0b070;
+            transition: all 0.1s ease;
+            cursor: pointer;
+        }
 
-    .balance-box{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      background:#0a121f;
-      padding:6px 16px;
-      border-radius:40px;
-      font-weight:600;
-    }
+        .card-container td.free {
+            background: #e9d5b5;
+            color: #b34e1a;
+            font-size: 1.6rem;
+            text-shadow: 0 0 2px #ffdd99;
+            border-color: #c2812a;
+        }
 
-    .balance-box b{
-      color:#f7b32b;
-    }
+        .card-container td.marked {
+            background: radial-gradient(ellipse at 30% 35%, #f3bc5c, #e5952b);
+            color: #2c1500;
+            box-shadow: 0 0 0 2px #ffdfaa, inset 0 0 10px #ffd58c;
+            border-color: #f5b642;
+            transform: scale(0.97);
+            font-weight: 900;
+        }
 
-    .timer{
-      font-size:2rem;
-      font-weight:800;
-      color:#f39c12;
-      font-family:monospace;
-    }
+        .last-call-area {
+            background: #0b0a07;
+            border-radius: 40px;
+            padding: 12px 16px;
+            margin: 8px 0 12px;
+            text-align: center;
+            box-shadow: inset 0 0 0 2px #6b4e2c, 0 8px 14px rgba(0,0,0,0.4);
+            border: 1px solid #e5b46b;
+        }
+        .last-call-label {
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            font-weight: bold;
+            color: #f7d88c;
+            text-transform: uppercase;
+            background: #2a241b;
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 30px;
+        }
+        .last-call-number {
+            font-size: 2.8rem;
+            font-weight: 800;
+            font-family: monospace;
+            color: #ffdd99;
+            text-shadow: 0 0 6px #ffaa33;
+            letter-spacing: 4px;
+            margin: 6px 0 4px;
+            background: #00000066;
+            border-radius: 50px;
+            padding: 4px;
+        }
+        .called-history {
+            background: #1e1610;
+            padding: 6px 12px;
+            border-radius: 40px;
+            font-size: 0.7rem;
+            color: #efcd91;
+            font-weight: bold;
+            overflow-x: auto;
+            white-space: nowrap;
+            font-family: monospace;
+            text-align: center;
+            margin-top: 6px;
+        }
 
-    .players-badge{
-      background:#fff;
-      color:#000;
-      padding:6px 16px;
-      border-radius:60px;
-      font-size:.9rem;
-      font-weight:600;
-    }
+        .balance-top {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            background: #f0efee;
+            padding: 8px 12px;
+            border-radius: 50px;
+            margin-bottom: 15px;
+        }
 
-    button{
-      background:linear-gradient(105deg,#f39c12,#e67e22);
-      border:none;
-      padding:10px 18px;
-      border-radius:60px;
-      font-weight:700;
-      color:#111;
-      cursor:pointer;
-    }
+        .players-badge {
+            background: #4f3b26;
+            padding: 4px 12px;
+            border-radius: 30px;
+            color: #ffda99;
+            font-weight: bold;
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
 
-    #depositBtn,
-    #withdrawBtn{
-      background:#2c3e4e;
-      color:#ffd966;
-    }
+        .timer-badge {
+            font-size: 1.5rem;
+            font-weight: 800;
+            font-family: monospace;
+            color: #fabe4c;
+            background: #171007;
+            padding: 0 16px;
+            border-radius: 50px;
+        }
 
-    #randomCardBtn{
-      background:linear-gradient(135deg,#4a6a8a,#2a4a6a);
-      color:#ffecb3;
-    }
+        .grid-100 {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 5px;
+            margin: 12px 0;
+            background: #efe2ce;
+            padding: 8px;
+            border-radius: 28px;
+        }
 
-    #bingoBtn{
-      width:100%;
-      margin-top:14px;
-      padding:14px;
-      font-size:1.2rem;
-      background:linear-gradient(115deg,#e67e22,#f1c40f);
-    }
+        .grid-cell {
+            background: #f6eedb;
+            border-radius: 12px;
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 0.7rem;
+            color: #3c2a1b;
+            border: 2px solid #cb9f66;
+            cursor: pointer;
+            transition: 0.05s linear;
+            font-family: monospace;
+            min-width: 28px;
+        }
 
-    .grid-100{
-      display:grid;
-      grid-template-columns:repeat(10,1fr);
-      gap:8px;
-      margin:20px 0;
-    }
+        .grid-cell.taken {
+            background: #aa7e54;
+            color: #1e170f;
+            text-decoration: line-through;
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
 
-    .grid-cell{
-      background:rgba(20,32,48,.8);
-      border-radius:14px;
-      aspect-ratio:1/1;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-weight:700;
-      cursor:pointer;
-      border:1px solid rgba(255,215,120,.3);
-    }
+        .grid-cell.selected {
+            background: #f3bc5c;
+            border: 3px solid #d96c1c;
+            box-shadow: 0 0 0 2px #ffe1a0;
+        }
 
-    .grid-cell.taken{
-      background:#6d2e2e;
-      text-decoration:line-through;
-      opacity:.6;
-      cursor:not-allowed;
-    }
+        button {
+            min-height: 44px;
+            min-width: 44px;
+        }
+        button:active { transform: scale(0.97); }
 
-    .grid-cell.selected{
-      background:radial-gradient(circle at 30% 20%,#f7b32b,#e67e22);
-      color:#000;
-    }
+        .rules-btn {
+            background: #3b2d1f;
+            color: #f7d992;
+            border: 1px solid #e7b153;
+            margin-top: 15px;
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
 
-    .card-container{
-      margin-top:18px;
-      display:flex;
-      justify-content:center;
-      background:rgba(0,0,0,.3);
-      border-radius:32px;
-      padding:10px;
-    }
+        /* MODALS (unchanged) */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(6px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            visibility: hidden;
+            opacity: 0;
+            transition: 0.2s;
+        }
+        .modal.active { visibility: visible; opacity: 1; }
+        .modal-content {
+            background: #ffffff;
+            border-radius: 28px;
+            padding: 20px;
+            max-width: 92%;
+            width: 380px;
+            max-height: 85vh;
+            overflow-y: auto;
+            font-family: 'Inter', system-ui, sans-serif;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+        }
+        .bank-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+        .bank-icon { font-size: 1.8rem; }
+        .bank-title { font-size: 1.3rem; font-weight: 800; color: #1e293b; }
+        .bank-sub { color: #475569; font-size: 0.75rem; }
+        .account-card { background: #f1f5f9; border-radius: 20px; padding: 12px; margin: 12px 0; border-left: 4px solid #f59e0b; }
+        .account-label { font-size: 0.65rem; text-transform: uppercase; color: #64748b; }
+        .account-number { font-size: 1.1rem; font-weight: 700; font-family: monospace; color: #0f172a; word-break: break-all; }
+        .input-group { margin: 12px 0; }
+        .input-group label { display: block; font-size: 0.75rem; font-weight: 600; color: #334155; margin-bottom: 4px; }
+        .input-group input, .input-group .file-label { width: 100%; padding: 12px; border-radius: 50px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 0.9rem; }
+        .file-label { display: block; text-align: center; background: #fef3c7; cursor: pointer; font-weight: 600; color: #b45309; }
+        .transaction-summary { background: #eef2ff; border-radius: 20px; padding: 10px; margin: 12px 0; font-size: 0.8rem; }
+        .modal-buttons { display: flex; gap: 10px; margin-top: 16px; }
+        .modal-buttons button { flex: 1; padding: 12px; border-radius: 50px; font-weight: 700; border: none; cursor: pointer; font-size: 0.9rem; }
+        .btn-primary { background: #f59e0b; color: #1e293b; }
+        .btn-secondary { background: #e2e8f0; color: #334155; }
+        .type-btn { background: #f1f5f9; display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 50px; margin: 6px 0; font-weight: 600; border: 1px solid #e2e8f0; width: 100%; cursor: pointer; font-size: 0.9rem; }
 
-    .card-container table{
-      border-collapse:separate;
-      border-spacing:6px;
-    }
+        /* winner overlay */
+        .winner-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(12px);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            visibility: hidden;
+            opacity: 0;
+        }
+        .winner-modal.active { visibility: visible; opacity: 1; }
+        .winner-card {
+            background: #fffbee;
+            border-radius: 40px;
+            padding: 20px;
+            text-align: center;
+            border: 4px solid #ffb347;
+            width: 85%;
+            max-width: 300px;
+        }
+        .confetti { position: fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:9999; }
 
-    .card-container td{
-      width:58px;
-      height:58px;
-      background:#0f1a24;
-      border-radius:18px;
-      text-align:center;
-      font-weight:700;
-      border:1px solid rgba(243,156,18,.5);
-    }
+        /* NEW: Pages for History, Wallet, Profile */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .back-btn {
+            background: #dbbd98;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .history-list {
+            list-style: none;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .history-list li {
+            padding: 10px;
+            border-bottom: 1px solid #eedbc8;
+            font-size: 0.8rem;
+        }
+        .wallet-card {
+            background: #f1f5f9;
+            border-radius: 28px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .wallet-amount-large {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #d45a1c;
+        }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .mt-2 { margin-top: 12px; }
+        .profile-avatar {
+            font-size: 4rem;
+            text-align: center;
+            margin: 10px 0;
+        }
 
-    .card-container td.marked{
-      background:radial-gradient(circle at 30% 35%,#f7d44a,#e67e22);
-      color:#111;
-    }
-
-    .card-container td.free{
-      background:#2a3e4e;
-      color:#ffd966;
-    }
-
-    .call-hero{
-      background:linear-gradient(145deg,#0b121f,#03060c);
-      border-radius:80px;
-      padding:12px 20px;
-      text-align:center;
-      margin:20px 0 10px;
-      border:1px solid #f39c12;
-    }
-
-    #currentCall{
-      font-size:4rem;
-      font-weight:800;
-      font-family:monospace;
-      color:#ffd966;
-    }
-
-    #calledList{
-      background:rgba(0,0,0,.5);
-      border-radius:48px;
-      padding:12px 16px;
-      font-size:.85rem;
-      color:#ffe0aa;
-      overflow-x:auto;
-      white-space:nowrap;
-      margin:12px 0;
-    }
-
-    .modal{
-      position:fixed;
-      inset:0;
-      background:rgba(0,0,0,.8);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      visibility:hidden;
-      opacity:0;
-      transition:.2s;
-      z-index:999;
-    }
-
-    .modal.active{
-      visibility:visible;
-      opacity:1;
-    }
-
-    .modal-content{
-      background:rgba(20,30,50,.95);
-      border-radius:40px;
-      padding:24px 20px;
-      width:90%;
-      max-width:360px;
-      border:1px solid #f39c12;
-      text-align:center;
-    }
-
-    .modal-content h3{
-      color:#ffd966;
-      margin-bottom:20px;
-    }
-
-    .modal-content input,
-    .modal-content .file-label{
-      width:100%;
-      margin:12px 0;
-      padding:14px;
-      border-radius:60px;
-      border:none;
-      background:#0f1a24;
-      color:white;
-      text-align:center;
-    }
-
-    .modal-content .file-label{
-      background:#2c3e4e;
-      cursor:pointer;
-      display:block;
-    }
-
-    .modal-content input[type=file]{
-      display:none;
-    }
-
-    .modal-buttons{
-      display:flex;
-      gap:12px;
-      margin-top:20px;
-    }
-
-    .close-modal{
-      background:#4a2f2f;
-      color:#ffb3b3;
-    }
-
-    @media(max-width:520px){
-      .card-container td{
-        width:48px;
-        height:48px;
-      }
-
-      #currentCall{
-        font-size:2.8rem;
-      }
-    }
-  </style>
+        @media (max-width: 550px) {
+            body { padding: 8px; }
+            .page { padding: 12px 14px 20px; }
+            .card-container td { width: 48px; height: 48px; font-size: 1rem; border-radius: 12px; }
+            .card-container thead tr th { font-size: 1.2rem; width: 48px; }
+            .grid-cell { font-size: 0.6rem; }
+            .last-call-number { font-size: 2rem; }
+        }
+    </style>
 </head>
-
 <body>
 
-  <!-- Deposit Modal -->
-  <div id="depositModal" class="modal">
-    <div class="modal-content">
-      <h3>📸 Deposit by Telebirr to 0924839730</h3>
+    <!-- MODALS (DEPOSIT/WITHDRAW/RULES) - unchanged -->
+    <div id="depositTypeModal" class="modal"><div class="modal-content"><div class="bank-header"><span class="bank-icon">🏦</span><div><div class="bank-title">Deposit</div><div class="bank-sub">Choose payment method</div></div></div><button class="type-btn" data-type="telebirr"><span>📱</span> Telebirr</button><button class="type-btn" data-type="cbebirr"><span>🏦</span> CBE Birr</button><button class="type-btn" data-type="mpesa"><span>📲</span> M-Pesa</button><button id="closeDepositTypeBtn" class="type-btn" style="background:#f1f5f9;">Cancel</button></div></div>
+    <div id="depositDetailsModal" class="modal"><div class="modal-content"><div class="bank-header"><span class="bank-icon">💸</span><div><div class="bank-title" id="depositDetailsTitle">Deposit via Telebirr</div><div class="bank-sub">Send payment & attach proof</div></div></div><div class="account-card"><div class="account-label">RECIPIENT ACCOUNT</div><div class="account-number" id="depositAccountNumber">0924839730</div><div class="account-label" style="margin-top:8px;">ACCOUNT NAME</div><div class="account-number" style="font-size:1rem;">DOT BINGO OFFICIAL</div></div><div class="input-group"><label>📞 Your Mobile Number</label><input type="tel" id="depositPlayerPhone" placeholder="" required></div><div class="input-group"><label>💰 Amount (ETB)</label><input type="number" id="depositAmount" placeholder="Min 10 ETB" min="10" step="any"></div><div class="input-group"><label>🧾 Transaction ID (optional)</label><input type="text" id="depositRef" placeholder="e.g., TRX123456"></div><div class="input-group"><label class="file-label" for="depositProofImage">📎 Attach Screenshot / Proof</label><input type="file" id="depositProofImage" accept="image/*" capture="environment" style="display:none;"></div><div class="transaction-summary">💡 After sending, submit proof. Funds added after manual verification.</div><div class="modal-buttons"><button id="submitDepositBtn" class="btn-primary">✔ Submit Request</button><button id="backDepositBtn" class="btn-secondary">← Back</button></div></div></div>
+    <div id="withdrawTypeModal" class="modal"><div class="modal-content"><div class="bank-header"><span class="bank-icon">💰</span><div><div class="bank-title">Withdraw Funds</div><div class="bank-sub">Select withdrawal method</div></div></div><button class="type-btn" data-type="telebirr"><span>📱</span> Telebirr</button><button class="type-btn" data-type="cbebirr"><span>🏦</span> CBE Birr</button><button class="type-btn" data-type="mpesa"><span>📲</span> M-Pesa </button><button id="closeWithdrawTypeBtn" class="type-btn">Cancel</button></div></div>
+    <div id="withdrawDetailsModal" class="modal"><div class="modal-content"><div class="bank-header"><span class="bank-icon">🏧</span><div><div class="bank-title" id="withdrawDetailsTitle">Withdraw via Telebirr</div><div class="bank-sub">Your account details</div></div></div><div class="input-group"><label>👤 Full Name (as per bank/mobile money)</label><input type="text" id="withdrawName" placeholder="Full name" required></div><div class="input-group"><label>📞 Account / Phone Number</label><input type="text" id="withdrawReceiver" placeholder="" required></div><div class="input-group"><label>💰 Amount (ETB) - Min 20 ETB</label><input type="number" id="withdrawAmount" placeholder="Amount" min="20" step="any"></div><div class="transaction-summary">⏱️ Withdrawals processed within 24h.</div><div class="modal-buttons"><button id="submitWithdrawBtn" class="btn-primary">✔ Request Withdrawal</button><button id="backWithdrawBtn" class="btn-secondary">← Back</button></div></div></div>
+    <div id="rulesModal" class="modal"><div class="modal-content"><div class="bank-header"><span class="bank-icon">📜</span><div><div class="bank-title">BINGO RULES</div><div class="bank-sub">75-ball classic</div></div></div><div class="rules-text" style="font-size:0.85rem; line-height:1.4;"><p><strong>💰 Entry fee:</strong> 10 ETB per card</p><p><strong>🏆 Prize pool:</strong> 80% of total entry fees <em>(e.g., 10 players → 80 ETB prize)</em></p><p><strong>🎯 Win conditions:</strong><br>• Complete any horizontal row, vertical column, or main diagonal<br>• OR mark all four corners (top‑left, top‑right, bottom‑left, bottom‑right)</p><p><strong>⏱️ Claim rule:</strong> You must press <strong>“CLAIM BINGO!”</strong> immediately after the number that completes your pattern.<br>❌ Late claims (after the next number is called) are <strong>invalid</strong>.</p><p><strong>👥 Multiple winners:</strong> Prize is split equally among all players who bingo on the same number.</p></div><button id="closeRulesBtn" class="btn-primary" style="width:100%;">Got it</button></div></div>
+    <div id="winnerOverlay" class="winner-modal"><div class="winner-card"><div class="trophy">🏆</div><h2 id="winTitle">BINGO!</h2><div class="winners-list" id="winList"></div><div class="prize" id="winPrize"></div><button onclick="document.getElementById('winnerOverlay').classList.remove('active')" class="btn-primary">🎉 Continue</button></div></div>
 
-      <input type="tel" id="depositPhone" placeholder="09xxxxxxxx">
-
-      <label class="file-label" for="proofImage">
-        📎 Attach payment screenshot
-      </label>
-
-      <input type="file" id="proofImage" accept="image/*">
-
-      <div class="modal-buttons">
-        <button id="submitDepositBtn">✔ Submit</button>
-        <button id="closeModalBtn" class="close-modal">Cancel</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Lobby -->
-  <div id="lobbyPage" class="page">
-
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-      <h2>🎰 NEBULA BINGO</h2>
-      <div class="players-badge">
-        👥 <span id="playersCount">0</span>
-      </div>
-    </div>
-
-    <div class="info-grid">
-
-      <div class="balance-box">
-        <span>💰 BAL</span>
-        <b id="lobbyBalance">0</b>
-
-        <div style="display:flex;gap:6px;margin-left:8px;">
-          <button id="depositBtn">+Deposit</button>
-          <button id="withdrawBtn">-Withdraw</button>
+    <!-- STAKE PAGE (unchanged) -->
+    <div id="stakePage" class="page">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <h2 style="font-family:'Courier New', monospace; color:#b85c1a; font-size:1.8rem;">🎲 B·I·N·G·O</h2>
+            <div class="players-badge">DOT BINGO</div>
         </div>
-      </div>
-
-      <div class="timer" id="lobbyTimer">30s</div>
-    </div>
-
-    <div style="display:flex;justify-content:space-between;margin:10px 0;">
-      <span>🎯 Pick card ID:</span>
-
-      <div>
-        🎴 Selected:
-        <span id="selectedNumber">-</span>
-      </div>
-
-      <button id="randomCardBtn">✨ Random Card</button>
-    </div>
-
-    <div id="numberGrid" class="grid-100"></div>
-
-    <div style="margin-top:8px;">🎴 Your card preview</div>
-
-    <div id="lobbyCardPreview" class="card-container"></div>
-
-  </div>
-
-  <!-- Game -->
-  <div id="gamePage" class="page hidden">
-
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-
-      <h2>⚡ LIVE BINGO</h2>
-
-      <div style="display:flex;gap:10px;align-items:center;">
-
-        <div class="players-badge">
-          👥 <span id="gamePlayersCount">0</span>
+        <h3 style="text-align:center; margin:20px 0 10px;">Choose Your Stake</h3>
+        <div style="display:flex; gap:20px; justify-content:center; margin:20px 0;">
+            <button id="stake10Btn" class="start-btn" style="padding:12px 30px;">10 ETB</button>
+            <button id="stake20Btn" class="start-btn" style="padding:12px 30px;">20 ETB</button>
         </div>
-
-        <div class="balance-box">
-          <span>💰</span>
-          <b id="gameBalance">0</b>
+        <div class="stats-badge" style="display:flex; justify-content:space-between; background:#e9dbc8; border-radius:60px; padding:12px; margin-top:20px;">
+            <div><div class="stat-num">45,000+</div><div class="stat-label">Active Players</div></div>
+            <div><div class="stat-num">60,000+</div><div class="stat-label">Games Played</div></div>
+            <div><div class="stat-num">500+</div><div class="stat-label">Winners Daily</div></div>
         </div>
-
-      </div>
     </div>
 
-    <div style="
-      background:rgba(0,0,0,.45);
-      border:1px solid rgba(243,156,18,.35);
-      border-radius:30px;
-      padding:12px 18px;
-      margin-bottom:14px;
-      text-align:center;
-      color:#ffd966;
-      font-weight:700;
-    ">
-      🏆 Winning Prize:
-      <span id="winningBalance" style="color:#f7b32b;font-size:1.3rem;">
-        0
-      </span>
-      ETB
+    <!-- LOBBY PAGE (main game lobby) -->
+    <div id="lobbyPage" class="page hidden">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+            <h2 style="font-family:'Courier New', monospace; background: #b5571a; -webkit-background-clip: text; background-clip: text; color:#b85c1a; font-size:1.6rem;">🎲 B·I·N·G·O</h2>
+            <div class="players-badge">👥 <span id="playersCount">0</span></div>
+        </div>
+        <div class="balance-top">
+            <div style="font-weight:bold;">💰 BAL <b id="lobbyBalance">0</b> ETB</div>
+            <div style="display:flex; gap:8px;">
+                <button id="depositBtn" style="background:#6b4c2c; font-size:1rem; padding:6px 14px;">+Deposit</button>
+                <button id="withdrawBtn" style="background:#6b4c2c; font-size:1rem; padding:6px 14px;">-Withdraw</button>
+            </div>
+            <div class="timer-badge" id="lobbyTimer">30s</div>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin:8px 0; flex-wrap:wrap; gap:8px;">
+            <span>🎴 Pick card ID:</span>
+            <span>Selected: <span id="selectedNumber">-</span></span>
+            <button id="randomCardBtn" style="background:#b5642c; padding:6px 14px;">✨ Random Card</button>
+        </div>
+        <div id="numberGrid" class="grid-100"></div>
+        <div style="margin-top:8px;">🎴 Your Bingo Card Preview</div>
+        <div id="lobbyCardPreview" class="card-container"></div>
+        
+        <!-- TABS (now open separate pages) -->
+        <div class="tab-bar" style="display:flex; gap:8px; margin-top:20px; justify-content:space-between;">
+            <button id="gameTabBtn" class="tab-btn active" style="flex:1;">🎮 Game</button>
+            <button id="historyTabBtn" class="tab-btn" style="flex:1;">📜 History</button>
+            <button id="walletTabBtn" class="tab-btn" style="flex:1;">💰 Wallet</button>
+            <button id="profileTabBtn" class="tab-btn" style="flex:1;">👤 Profile</button>
+        </div>
+        
+        <button id="rulesBtn" class="rules-btn" style="margin-top:20px;">📜 Game Rules</button>
     </div>
 
-    <div class="call-hero">
-      <div style="font-size:.8rem;">🎲 LAST CALL</div>
-      <div id="currentCall">-</div>
+    <!-- HISTORY PAGE -->
+    <div id="historyPage" class="page hidden">
+        <div class="page-header">
+            <h2>📜 Game History</h2>
+            <button class="back-btn" id="backFromHistoryBtn">← Back to Lobby</button>
+        </div>
+        <ul class="history-list" id="fullHistoryList">
+            <li>No events yet</li>
+        </ul>
     </div>
 
-    <div id="calledList">Called: —</div>
+    <!-- WALLET PAGE -->
+    <div id="walletPage" class="page hidden">
+        <div class="page-header">
+            <h2>💰 My Wallet</h2>
+            <button class="back-btn" id="backFromWalletBtn">← Back to Lobby</button>
+        </div>
+        <div class="wallet-card">
+            <div>🏦 Main Wallet</div>
+            <div class="wallet-amount-large" id="mainWalletPage">0</div>
+            <div class="mt-2">🎲 Play Wallet</div>
+            <div class="wallet-amount-large" id="playWalletPage">0</div>
+        </div>
+        <button id="addFundsPageBtn" class="btn-primary" style="width:100%;">➕ Add 200 ETB to Main</button>
+        <button id="transferToPlayPageBtn" class="btn-secondary" style="width:100%; margin-top:12px;">🔄 Transfer 200 Main → Play</button>
+    </div>
 
-    <div class="card-container" id="gameCard"></div>
+    <!-- PROFILE PAGE -->
+    <div id="profilePage" class="page hidden">
+        <div class="page-header">
+            <h2>👤 My Profile</h2>
+            <button class="back-btn" id="backFromProfileBtn">← Back to Lobby</button>
+        </div>
+        <div class="profile-avatar">🎲</div>
+        <div style="text-align:center;">
+            <p><strong>Username:</strong> <span id="profileUsername">DOT Player</span></p>
+            <p><strong>Total Wins:</strong> <span id="profileWins">0</span></p>
+            <p><strong>Member since:</strong> 2025</p>
+        </div>
+    </div>
 
-    <button id="bingoBtn">
-      🏆 CLAIM BINGO! 🏆
-    </button>
+    <!-- GAME PAGE (unchanged) -->
+    <div id="gamePage" class="page hidden">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+            <h2 style="font-size:1.6rem; color:#bb651e;">⚡ BINGO</h2>
+            <div class="players-badge">👥 <span id="gamePlayersCount">0</span></div>
+        </div>
+        <div style="background:#30251b; border-radius:40px; text-align:center; padding:6px; margin:6px 0;">
+            <span style="color:#eac67e; font-size:0.9rem;">🏆 PRIZE POOL</span>
+            <div id="winningBalance" style="font-size:1.6rem; font-weight:800; color:#f5bc70;">0 ETB</div>
+        </div>
+        <div class="last-call-area">
+            <div class="last-call-label">🎲 LAST CALL</div>
+            <div class="last-call-number" id="currentCall">0 - 75</div>
+            <div class="called-history" id="calledList">Called: —</div>
+        </div>
+        <div id="gameCard" class="card-container"></div>
+        <button id="bingoBtn" class="claim-bingo-btn">🏆 CLAIM BINGO! 🏆</button>
+        <button id="rulesBtnGame" class="rules-btn" style="width:100%; margin-top:8px;">📜 Rules</button>
+    </div>
 
-  </div>
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        let socket, userCard = [], markedNumbers = [], isGameActive = false, lobbyTimerInterval = null, selectedCardNumber = null;
+        let depositAccounts = {}, selectedDepositType = null, selectedWithdrawType = null;
+        let lastWinAmount = 0;
+        let takenNumbers = new Set();
+        
+        // Wallet & history state
+        let mainWallet = 1000;
+        let playWallet = 500;
+        let totalWins = 0;
+        let historyEntries = [];
 
-  <script>
-    const tg = window.Telegram.WebApp;
+        // DOM elements
+        const lobbyPage = document.getElementById('lobbyPage'), gamePage = document.getElementById('gamePage');
+        const stakePage = document.getElementById('stakePage');
+        const historyPage = document.getElementById('historyPage');
+        const walletPage = document.getElementById('walletPage');
+        const profilePage = document.getElementById('profilePage');
+        const lobbyTimerEl = document.getElementById('lobbyTimer'), playersCountEl = document.getElementById('playersCount');
+        const lobbyBalanceEl = document.getElementById('lobbyBalance'), gameBalanceEl = document.getElementById('gameBalance');
+        const gamePlayersCountEl = document.getElementById('gamePlayersCount'), winningBalanceEl = document.getElementById('winningBalance');
+        const currentCallEl = document.getElementById('currentCall'), calledListEl = document.getElementById('calledList');
+        const selectedNumberEl = document.getElementById('selectedNumber'), numberGrid = document.getElementById('numberGrid');
+        const lobbyCardPreview = document.getElementById('lobbyCardPreview');
 
-    tg.ready();
-    tg.expand();
-
-    let socket;
-    let userCard = [];
-    let markedNumbers = [];
-    let isGameActive = false;
-    let lobbyTimerInterval = null;
-    let selectedCardNumber = null;
-
-    const lobbyPage = document.getElementById('lobbyPage');
-    const gamePage = document.getElementById('gamePage');
-
-    const lobbyTimerEl = document.getElementById('lobbyTimer');
-    const playersCountEl = document.getElementById('playersCount');
-
-    const lobbyBalanceEl = document.getElementById('lobbyBalance');
-    const gameBalanceEl = document.getElementById('gameBalance');
-
-    const gamePlayersCountEl = document.getElementById('gamePlayersCount');
-    const winningBalanceEl = document.getElementById('winningBalance');
-
-    const currentCallEl = document.getElementById('currentCall');
-    const calledListEl = document.getElementById('calledList');
-
-    const selectedNumberEl = document.getElementById('selectedNumber');
-    const numberGrid = document.getElementById('numberGrid');
-
-    const lobbyCardPreview = document.getElementById('lobbyCardPreview');
-
-    let takenNumbers = new Set();
-
-    const depositModal = document.getElementById('depositModal');
-    const depositPhoneInput = document.getElementById('depositPhone');
-    const proofImageInput = document.getElementById('proofImage');
-
-    function renderCard(card, id, clickable = false){
-
-      const cont = document.getElementById(id);
-
-      if(!cont) return;
-
-      cont.innerHTML = '';
-
-      const table = document.createElement('table');
-
-      const letters = ['B','I','N','G','O'];
-
-      const thead = document.createElement('thead');
-      const hr = document.createElement('tr');
-
-      letters.forEach(letter => {
-        const th = document.createElement('th');
-
-        th.textContent = letter;
-        th.style.color = '#f7b32b';
-        th.style.fontSize = '1.4rem';
-
-        hr.appendChild(th);
-      });
-
-      thead.appendChild(hr);
-      table.appendChild(thead);
-
-      const tbody = document.createElement('tbody');
-
-      for(let r=0;r<5;r++){
-
-        const tr = document.createElement('tr');
-
-        for(let c=0;c<5;c++){
-
-          const val = card[r][c];
-
-          const td = document.createElement('td');
-
-          td.textContent = val;
-
-          if(val === 'FREE'){
-            td.classList.add('free');
-          }
-
-          if(markedNumbers.includes(val)){
-            td.classList.add('marked');
-          }
-
-          if(clickable && val !== 'FREE'){
-            td.style.cursor = 'pointer';
-
-            td.onclick = () => {
-              if(!isGameActive) return;
-
-              socket.emit('markNumber', val);
-            };
-          }
-
-          tr.appendChild(td);
+        // Helper: add history entry
+        function addHistory(message, isWin = false) {
+            const time = new Date().toLocaleTimeString();
+            historyEntries.unshift({ time, message, win: isWin });
+            if (historyEntries.length > 50) historyEntries.pop();
+            renderFullHistory();
+        }
+        function renderFullHistory() {
+            const list = document.getElementById('fullHistoryList');
+            if (!list) return;
+            if (historyEntries.length === 0) list.innerHTML = '<li>No events yet</li>';
+            else list.innerHTML = historyEntries.map(h => `<li>${h.time} - ${h.message}</li>`).join('');
+        }
+        function updateWalletUI() {
+            document.getElementById('mainWalletPage').innerText = Math.floor(mainWallet);
+            document.getElementById('playWalletPage').innerText = Math.floor(playWallet);
+            document.getElementById('profileWins').innerText = totalWins;
+            lobbyBalanceEl.innerText = Math.floor(mainWallet + playWallet);
         }
 
-        tbody.appendChild(tr);
-      }
+        function syncBalance(value) { lobbyBalanceEl.innerText = Math.floor(mainWallet + playWallet); if(gameBalanceEl) gameBalanceEl.innerText = Math.floor(mainWallet + playWallet); }
 
-      table.appendChild(tbody);
-
-      cont.appendChild(table);
-    }
-
-    function showLobby(time){
-
-      lobbyPage.classList.remove('hidden');
-      gamePage.classList.add('hidden');
-
-      isGameActive = false;
-
-      startTimer(time || 30);
-
-      if(userCard.length){
-        renderCard(userCard, 'lobbyCardPreview');
-      }
-    }
-
-    function showGame(){
-
-      lobbyPage.classList.add('hidden');
-      gamePage.classList.remove('hidden');
-
-      isGameActive = true;
-
-      clearInterval(lobbyTimerInterval);
-
-      if(userCard.length){
-        renderCard(userCard, 'gameCard', true);
-      }
-    }
-
-    function startTimer(s){
-
-      let left = s;
-
-      lobbyTimerEl.textContent = left + 's';
-
-      clearInterval(lobbyTimerInterval);
-
-      lobbyTimerInterval = setInterval(() => {
-
-        left--;
-
-        if(left <= 0){
-
-          clearInterval(lobbyTimerInterval);
-
-          showGame();
-
-        } else {
-
-          lobbyTimerEl.textContent = left + 's';
+        // Card selection with Play Wallet deduction
+        function handleSelectCard(number) {
+            if (isGameActive) { alert("Game already in progress"); return; }
+            if (takenNumbers.has(number)) { alert("Card already taken"); return; }
+            if (playWallet < 10) {
+                alert("Insufficient Play Wallet balance! Please transfer funds from Main Wallet.");
+                return;
+            }
+            playWallet -= 10;
+            updateWalletUI();
+            addHistory(`🎴 Selected card #${number} (10 ETB deducted from Play Wallet)`);
+            socket.emit('selectCardNumber', number);
         }
 
-      },1000);
-    }
-
-    function buildNumberGrid(){
-
-      numberGrid.innerHTML = '';
-
-      for(let i=1;i<=100;i++){
-
-        const cell = document.createElement('div');
-
-        cell.className = 'grid-cell';
-
-        cell.dataset.number = i;
-
-        cell.textContent = i;
-
-        if(takenNumbers.has(i)){
-
-          cell.classList.add('taken');
-
-        } else {
-
-          cell.onclick = () => {
-
-            if(isGameActive) return;
-
-            socket.emit('selectCardNumber', i);
-          };
+        function renderCard(card, containerId, clickable = false) {
+            const cont = document.getElementById(containerId);
+            if(!cont) return;
+            cont.innerHTML = '';
+            const table = document.createElement('table');
+            table.style.borderCollapse = 'separate'; table.style.borderSpacing = '6px';
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            ['B', 'I', 'N', 'G', 'O'].forEach(l => { let th = document.createElement('th'); th.textContent = l; headerRow.appendChild(th); });
+            thead.appendChild(headerRow); table.appendChild(thead);
+            const tbody = document.createElement('tbody');
+            for(let r=0;r<5;r++) {
+                const tr = document.createElement('tr');
+                for(let c=0;c<5;c++) {
+                    const val = card[r][c];
+                    const td = document.createElement('td');
+                    td.textContent = val === 'FREE' ? '★' : val;
+                    if(val === 'FREE') td.classList.add('free');
+                    if(markedNumbers.includes(val)) td.classList.add('marked');
+                    if(clickable && val !== 'FREE') { td.style.cursor = 'pointer'; td.onclick = () => { if(isGameActive && socket) socket.emit('markNumber', val); }; }
+                    tr.appendChild(td);
+                }
+                tbody.appendChild(tr);
+            }
+            table.appendChild(tbody); cont.appendChild(table);
         }
 
-        numberGrid.appendChild(cell);
-      }
-
-      if(selectedCardNumber){
-
-        const sel = numberGrid.querySelector(
-          `[data-number='${selectedCardNumber}']`
-        );
-
-        if(sel){
-          sel.classList.add('selected');
+        function buildNumberGrid() {
+            numberGrid.innerHTML = '';
+            for(let i=1;i<=100;i++) {
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell';
+                cell.dataset.number = i;
+                cell.textContent = i;
+                if(takenNumbers.has(i)) cell.classList.add('taken');
+                else cell.onclick = () => { if(!isGameActive && socket && !takenNumbers.has(i)) handleSelectCard(i); };
+                numberGrid.appendChild(cell);
+            }
+            if(selectedCardNumber) {
+                const sel = numberGrid.querySelector(`[data-number='${selectedCardNumber}']`);
+                if(sel) sel.classList.add('selected');
+            }
         }
-      }
-    }
+        
+        function updateGridWithTakenNumbers(nums) { takenNumbers = new Set(nums); buildNumberGrid(); }
+        function getBingoLetter(num) { if(num<=15) return 'B'; if(num<=30) return 'I'; if(num<=45) return 'N'; if(num<=60) return 'G'; return 'O'; }
+        function formatCall(num) { return `${getBingoLetter(num)}-${num}`; }
+        function popCall() { currentCallEl.classList.add('pop'); setTimeout(()=>currentCallEl.classList.remove('pop'),150); }
 
-    function updateGridWithTakenNumbers(nums){
-
-      takenNumbers = new Set(nums);
-
-      buildNumberGrid();
-    }
-
-    function getBingoLetter(num){
-
-      if(num >= 1 && num <= 15) return 'B';
-      if(num >= 16 && num <= 30) return 'I';
-      if(num >= 31 && num <= 45) return 'N';
-      if(num >= 46 && num <= 60) return 'G';
-
-      return 'O';
-    }
-
-    function formatCall(num){
-      return `${getBingoLetter(num)}-${num}`;
-    }
-
-    function animateCall(){
-
-      currentCallEl.style.transform = 'scale(1.2)';
-
-      setTimeout(() => {
-        currentCallEl.style.transform = 'scale(1)';
-      },300);
-    }
-
-    function showDepositModal(){
-
-      depositPhoneInput.value = '';
-      proofImageInput.value = '';
-
-      depositModal.classList.add('active');
-    }
-
-    function closeDepositModal(){
-      depositModal.classList.remove('active');
-    }
-
-    async function submitDepositWithProof(){
-
-      const phone = depositPhoneInput.value.trim();
-
-      const file = proofImageInput.files[0];
-
-      if(!phone){
-        alert('Please enter your phone number');
-        return;
-      }
-
-      if(!/^0\d{9}$/.test(phone)){
-        alert('Invalid phone number');
-        return;
-      }
-
-      if(!file){
-        alert('Please attach payment screenshot');
-        return;
-      }
-
-      const amountStr = prompt('💰 Enter deposit amount (ETB):');
-
-      if(!amountStr) return;
-
-      const amount = parseFloat(amountStr);
-
-      if(isNaN(amount) || amount <= 0){
-        alert('Invalid amount');
-        return;
-      }
-
-      const formData = new FormData();
-
-      formData.append('phone', phone);
-      formData.append('amount', amount);
-      formData.append('proof', file);
-
-      try{
-
-        const response = await fetch('/api/request-deposit', {
-          method:'POST',
-          body:formData
-        });
-
-        const data = await response.json();
-
-        alert(data.message || 'Deposit submitted');
-
-        closeDepositModal();
-
-      }catch(err){
-
-        alert('Network error');
-      }
-    }
-
-    function handleWithdraw(){
-
-      const phone = prompt('📱 Enter phone number');
-
-      if(!phone) return;
-
-      const amountStr = prompt('💰 Withdraw amount');
-
-      if(!amountStr) return;
-
-      const amount = parseFloat(amountStr);
-
-      fetch('/api/request-withdraw',{
-        method:'POST',
-        headers:{
-          'Content-Type':'application/json'
-        },
-        body:JSON.stringify({
-          amount,
-          phone
-        })
-      })
-      .then(r => r.json())
-      .then(data => {
-        alert(data.message || 'Withdraw request sent');
-      });
-    }
-
-    async function connect(){
-
-      const initData = tg.initData;
-
-      if(!initData){
-        alert('Open inside Telegram');
-        return;
-      }
-
-      try{
-
-        const res = await fetch('/api/telegram-miniapp-auth',{
-          method:'POST',
-          headers:{
-            'Content-Type':'application/json'
-          },
-          body:JSON.stringify({
-            initData
-          })
-        });
-
-        const data = await res.json();
-
-        if(!data.success){
-          alert('Auth failed');
-          return;
+        function showLobby(timeLeft) {
+            // Hide all other pages
+            stakePage.classList.add('hidden');
+            historyPage.classList.add('hidden');
+            walletPage.classList.add('hidden');
+            profilePage.classList.add('hidden');
+            gamePage.classList.add('hidden');
+            lobbyPage.classList.remove('hidden');
+            isGameActive = false;
+            markedNumbers = [];
+            updateWalletUI();
+            startTimer(timeLeft || 30);
+            if(userCard.length) renderCard(userCard, 'lobbyCardPreview', false);
+        }
+        
+        function showGame() {
+            lobbyPage.classList.add('hidden');
+            stakePage.classList.add('hidden');
+            historyPage.classList.add('hidden');
+            walletPage.classList.add('hidden');
+            profilePage.classList.add('hidden');
+            gamePage.classList.remove('hidden');
+            isGameActive = true;
+            clearInterval(lobbyTimerInterval);
+            if(userCard.length) renderCard(userCard, 'gameCard', true);
+        }
+        
+        function startTimer(seconds) {
+            let left = seconds;
+            lobbyTimerEl.textContent = left+'s';
+            clearInterval(lobbyTimerInterval);
+            lobbyTimerInterval = setInterval(() => {
+                left--;
+                if(left <= 0) { clearInterval(lobbyTimerInterval); showGame(); }
+                else lobbyTimerEl.textContent = left+'s';
+            },1000);
         }
 
-      }catch(e){
-
-        alert('Fetch error');
-        return;
-      }
-
-      socket = io();
-
-      socket.on('connect', () => {
-
-        socket.emit('joinLobby');
-      });
-
-      socket.on('balanceUpdate', b => {
-
-        lobbyBalanceEl.textContent = b;
-        gameBalanceEl.textContent = b;
-      });
-
-      socket.on('lobbyState', state => {
-
-        showLobby(state.startsIn);
-
-        if(state.takenNumbers){
-          updateGridWithTakenNumbers(state.takenNumbers);
+        // Deposit/Withdraw (unchanged but add history)
+        async function loadDepositAccounts() { try { const res = await fetch('/api/deposit-accounts'); depositAccounts = await res.json(); } catch(e) {} }
+        function openDepositTypeModal() { document.getElementById('depositTypeModal').classList.add('active'); }
+        function closeDepositTypeModal() { document.getElementById('depositTypeModal').classList.remove('active'); }
+        function openDepositDetailsModal(type) {
+            selectedDepositType = type;
+            let acc = '', title = '', phoneHint = '';
+            if(type === 'telebirr') { title = 'Telebirr'; acc = depositAccounts.telebirr || '0924839730'; phoneHint = '09xxxxxxxx'; }
+            else if(type === 'cbebirr') { title = 'CBE Birr'; acc = depositAccounts.cbebirr || '1000123456789'; phoneHint = '09xxxxxxxx'; }
+            else { title = 'M-Pesa'; acc = depositAccounts.mpesa || '0712345678'; phoneHint = '07xxxxxxxx'; }
+            document.getElementById('depositDetailsTitle').innerHTML = `Deposit via ${title}`;
+            document.getElementById('depositAccountNumber').innerText = acc;
+            const phoneInput = document.getElementById('depositPlayerPhone');
+            phoneInput.placeholder = phoneHint;
+            phoneInput.value = '';
+            document.getElementById('depositAmount').value = '';
+            document.getElementById('depositRef').value = '';
+            document.getElementById('depositProofImage').value = '';
+            document.getElementById('depositDetailsModal').classList.add('active');
+            closeDepositTypeModal();
         }
-      });
-
-      socket.on('yourCard', card => {
-
-        userCard = card;
-
-        if(isGameActive){
-          renderCard(card, 'gameCard', true);
-        }else{
-          renderCard(card, 'lobbyCardPreview');
+        async function submitDepositWithProof() {
+            const phone = document.getElementById('depositPlayerPhone').value.trim();
+            const amount = document.getElementById('depositAmount').value.trim();
+            const file = document.getElementById('depositProofImage').files[0];
+            let phoneValid = false;
+            if(selectedDepositType === 'mpesa') {
+                phoneValid = /^07\d{8}$/.test(phone);
+                if(!phoneValid) return alert('Invalid M-Pesa number. Must start with 07 and have 10 digits (e.g., 0712345678)');
+            } else if(selectedDepositType === 'telebirr' || selectedDepositType === 'cbebirr') {
+                phoneValid = /^09\d{8}$/.test(phone);
+                if(!phoneValid) return alert(`Invalid ${selectedDepositType} number. Must start with 09 and have 10 digits (e.g., 0912345678)`);
+            }
+            if(!amount || isNaN(amount) || Number(amount) < 10) return alert('Minimum deposit 10 ETB');
+            if(!file) return alert('Please attach payment proof');
+            const fd = new FormData();
+            fd.append('phone', phone); fd.append('amount', amount); fd.append('payment_type', selectedDepositType); fd.append('proof', file);
+            const res = await fetch('/api/request-deposit', { method: 'POST', body: fd });
+            const data = await res.json();
+            alert(`✅ ${data.message || 'Deposit request submitted!'}`);
+            addHistory(`💰 Deposit request: ${amount} ETB via ${selectedDepositType}`);
+            document.getElementById('depositDetailsModal').classList.remove('active');
         }
-      });
-
-      socket.on('cardTaken', data => {
-
-        updateGridWithTakenNumbers(data.takenNumbers);
-
-        selectedCardNumber = null;
-
-        selectedNumberEl.textContent = '-';
-      });
-
-      socket.on('cardSelectionFailed', msg => {
-        alert(msg);
-      });
-
-      socket.on('playersCount', c => {
-
-        playersCountEl.textContent = c;
-        gamePlayersCountEl.textContent = c;
-
-        const entryFee = 10;
-
-        const prize = Math.floor((c * entryFee) * 0.8);
-
-        winningBalanceEl.textContent = prize;
-      });
-
-      socket.on('gameStarted', () => {
-
-        showGame();
-      });
-
-      socket.on('numberCalled', data => {
-
-        currentCallEl.textContent = formatCall(data.number);
-
-        const formattedList = (data.calledNumbers || [])
-          .map(n => formatCall(n));
-
-        calledListEl.textContent =
-          'Called: ' + formattedList.join(', ');
-
-        animateCall();
-      });
-
-      socket.on('markedNumbers', nums => {
-
-        markedNumbers = nums;
-
-        if(isGameActive){
-          renderCard(userCard, 'gameCard', true);
-        }else{
-          renderCard(userCard, 'lobbyCardPreview');
+        function openWithdrawTypeModal() { document.getElementById('withdrawTypeModal').classList.add('active'); }
+        function openWithdrawDetailsModal(type) {
+            selectedWithdrawType = type;
+            let title = (type === 'telebirr' ? 'Telebirr' : type === 'cbebirr' ? 'CBE Birr' : 'M-Pesa');
+            let phoneHint = (type === 'mpesa') ? '07xxxxxxxx' : '09xxxxxxxx';
+            document.getElementById('withdrawDetailsTitle').innerHTML = `Withdraw via ${title}`;
+            const receiverInput = document.getElementById('withdrawReceiver');
+            receiverInput.placeholder = phoneHint;
+            receiverInput.value = '';
+            document.getElementById('withdrawAmount').value = '';
+            document.getElementById('withdrawName').value = '';
+            document.getElementById('withdrawDetailsModal').classList.add('active');
+            document.getElementById('withdrawTypeModal').classList.remove('active');
         }
-      });
+        async function submitWithdrawRequest() {
+            const receiver = document.getElementById('withdrawReceiver').value.trim();
+            const amount = document.getElementById('withdrawAmount').value.trim();
+            const name = document.getElementById('withdrawName').value.trim();
+            if(!name) return alert("Full name required");
+            if(!amount || isNaN(amount) || Number(amount) < 20) return alert('Minimum withdrawal 20 ETB');
+            if(Number(amount) > mainWallet) return alert("Insufficient Main Wallet balance");
+            let receiverValid = false;
+            if(selectedWithdrawType === 'mpesa') {
+                receiverValid = /^07\d{8}$/.test(receiver);
+                if(!receiverValid) return alert('Invalid M-Pesa number. Must start with 07 and have 10 digits');
+            } else if(selectedWithdrawType === 'telebirr' || selectedWithdrawType === 'cbebirr') {
+                receiverValid = /^09\d{8}$/.test(receiver);
+                if(!receiverValid) return alert(`Invalid ${selectedWithdrawType} number. Must start with 09 and have 10 digits`);
+            }
+            const res = await fetch('/api/request-withdraw', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount, phone: receiver, withdrawal_type: selectedWithdrawType, name })
+            });
+            const data = await res.json();
+            alert(`💸 ${data.message || 'Withdrawal request submitted!'}`);
+            addHistory(`💸 Withdrawal request: ${amount} ETB via ${selectedWithdrawType}`);
+            document.getElementById('withdrawDetailsModal').classList.remove('active');
+        }
 
-      socket.on('gameEnded', data => {
+        function showWinnerOverlay(data) {
+            if(data.noWinner) { alert('No winner this round.'); return; }
+            const prize = data.prizeEach || data.totalPrize || 0;
+            lastWinAmount = prize;
+            playWallet += prize;
+            totalWins++;
+            updateWalletUI();
+            addHistory(`🏆 BINGO! Won ${prize} ETB!`, true);
+            document.getElementById('winTitle').innerHTML = (data.winners?.length > 1 ? `${data.winners.length} Winners!` : '🎉 BINGO!');
+            document.getElementById('winList').innerHTML = (data.winners || [data.winner]).join(', ');
+            document.getElementById('winPrize').innerHTML = prize + ' ETB';
+            document.getElementById('winnerOverlay').classList.add('active');
+            const confDiv = document.createElement('div'); confDiv.className = 'confetti';
+            for(let i=0;i<80;i++){ let p=document.createElement('div'); p.className='confetti-piece'; p.style.left=Math.random()*100+'%'; p.style.animationDuration=(Math.random()*3+2)+'s'; p.style.backgroundColor=`hsl(${Math.random()*360},80%,60%)`; confDiv.appendChild(p); }
+            document.body.appendChild(confDiv); setTimeout(()=>confDiv.remove(),3500);
+        }
 
-        isGameActive = false;
+        async function connect() {
+            const initData = tg.initData;
+            if(!initData){ alert('Open inside Telegram'); return; }
+            try { const res = await fetch('/api/telegram-miniapp-auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({initData})}); const data = await res.json(); if(!data.success) { alert('Auth failed'); return; } 
+                if(data.user && data.user.username) document.getElementById('profileUsername').innerText = data.user.username;
+            } catch(e) { alert('Network error'); return; }
+            socket = io();
+            socket.on('connect',()=>{ socket.emit('joinLobby'); });
+            socket.on('balanceUpdate', bal => { syncBalance(bal); });
+            socket.on('lobbyState', state => { showLobby(state.startsIn); if(state.takenNumbers) updateGridWithTakenNumbers(state.takenNumbers); if(state.playersCount) playersCountEl.innerText = state.playersCount; });
+            socket.on('yourCard', card => { userCard = card; if(isGameActive) renderCard(card,'gameCard',true); else renderCard(card,'lobbyCardPreview',false); });
+            socket.on('cardTaken', data => { updateGridWithTakenNumbers(data.takenNumbers); selectedCardNumber=null; selectedNumberEl.textContent='-'; });
+            socket.on('cardSelectionFailed', msg => alert(msg));
+            socket.on('playersCount', c => { playersCountEl.innerText=c; if(gamePlayersCountEl) gamePlayersCountEl.innerText=c; const prize=Math.floor(c*10*0.8); winningBalanceEl.innerText=prize; });
+            socket.on('gameStarted', data => { if(data?.prizePool) winningBalanceEl.innerText=data.prizePool; if(data?.playersCount) gamePlayersCountEl.innerText=data.playersCount; showGame(); });
+            socket.on('numberCalled', data => { currentCallEl.innerText = formatCall(data.number); popCall(); const list = (data.calledNumbers || []).map(n=>formatCall(n)); calledListEl.innerText = 'Called: '+list.join(', '); });
+            socket.on('calledNumbers', called => { const list = called.map(n=>formatCall(n)); calledListEl.innerText = 'Called: '+list.join(', '); });
+            socket.on('markedNumbers', nums => { markedNumbers = nums; if(isGameActive && userCard.length) renderCard(userCard,'gameCard',true); else if(!isGameActive && userCard.length) renderCard(userCard,'lobbyCardPreview',false); });
+            socket.on('gameEnded', (data) => {
+                if (data.winningNumber) {
+                    const winningFormatted = formatCall(data.winningNumber);
+                    document.getElementById('currentCall').innerText = winningFormatted;
+                }
+                showWinnerOverlay(data);
+            });
+            socket.on('invalidBingo', () => alert('❌ Not a valid bingo yet!'));
+            socket.on('depositStatus', data => { if(data.status==='approved') alert(`✅ Deposit +${data.amount} ETB approved!`); else alert('❌ Deposit rejected.'); });
+            socket.on('withdrawStatus', data => { if(data.status==='approved') alert(`✅ Withdrawal -${data.amount} ETB processed.`); else alert('❌ Withdrawal rejected.'); });
+        }
 
-        alert(
-          data.winner
-          ? '🏆 WINNER: ' + data.winner
-          : 'Game ended'
-        );
-      });
+        // Navigation: show specific page
+        function showPage(pageId) {
+            stakePage.classList.add('hidden');
+            lobbyPage.classList.add('hidden');
+            gamePage.classList.add('hidden');
+            historyPage.classList.add('hidden');
+            walletPage.classList.add('hidden');
+            profilePage.classList.add('hidden');
+            if (pageId === 'stake') stakePage.classList.remove('hidden');
+            else if (pageId === 'lobby') lobbyPage.classList.remove('hidden');
+            else if (pageId === 'game') gamePage.classList.remove('hidden');
+            else if (pageId === 'history') historyPage.classList.remove('hidden');
+            else if (pageId === 'wallet') walletPage.classList.remove('hidden');
+            else if (pageId === 'profile') profilePage.classList.remove('hidden');
+        }
 
-      socket.on('invalidBingo', () => {
-
-        alert('❌ Not a valid bingo yet!');
-      });
-    }
-
-    document.getElementById('depositBtn').onclick =
-      showDepositModal;
-
-    document.getElementById('withdrawBtn').onclick =
-      handleWithdraw;
-
-    document.getElementById('randomCardBtn').onclick = () => {
-
-      if(!isGameActive && socket){
-
-        socket.emit('newCardNumber');
-      }
-    };
-
-    document.getElementById('bingoBtn').onclick = () => {
-
-      if(socket){
-
-        socket.emit('claimBingo');
-      }
-    };
-
-    document.getElementById('submitDepositBtn').onclick =
-      submitDepositWithProof;
-
-    document.getElementById('closeModalBtn').onclick =
-      closeDepositModal;
-
-    depositModal.onclick = (e) => {
-
-      if(e.target === depositModal){
-
-        closeDepositModal();
-      }
-    };
-
-    buildNumberGrid();
-
-    connect();
-  </script>
-
+        // Event listeners for stake selection
+        document.getElementById('stake10Btn')?.addEventListener('click', () => { stake = 10; showPage('lobby'); addHistory(`🎲 Stake set to 10 ETB`); });
+        document.getElementById('stake20Btn')?.addEventListener('click', () => { stake = 20; showPage('lobby'); addHistory(`🎲 Stake set to 20 ETB`); });
+        
+        // Tab buttons: open separate pages
+        document.getElementById('historyTabBtn')?.addEventListener('click', () => { showPage('history'); if(lobbyTimerInterval) clearInterval(lobbyTimerInterval); });
+        document.getElementById('walletTabBtn')?.addEventListener('click', () => { showPage('wallet'); updateWalletUI(); if(lobbyTimerInterval) clearInterval(lobbyTimerInterval); });
+        document.getElementById('profileTabBtn')?.addEventListener('click', () => { showPage('profile'); updateWalletUI(); if(lobbyTimerInterval) clearInterval(lobbyTimerInterval); });
+        document.getElementById('gameTabBtn')?.addEventListener('click', () => { showPage('lobby'); startTimer(parseInt(lobbyTimerEl.textContent) || 30); });
+        
+        // Back buttons from history/wallet/profile to lobby
+        document.getElementById('backFromHistoryBtn')?.addEventListener('click', () => { showPage('lobby'); startTimer(30); });
+        document.getElementById('backFromWalletBtn')?.addEventListener('click', () => { showPage('lobby'); startTimer(30); });
+        document.getElementById('backFromProfileBtn')?.addEventListener('click', () => { showPage('lobby'); startTimer(30); });
+        
+        // Wallet actions on wallet page
+        document.getElementById('addFundsPageBtn')?.addEventListener('click', () => { mainWallet += 200; updateWalletUI(); addHistory('➕ Added 200 ETB to Main Wallet'); });
+        document.getElementById('transferToPlayPageBtn')?.addEventListener('click', () => { let amount = Math.min(mainWallet, 200); if (amount < 10) alert('Not enough Main balance'); else { mainWallet -= amount; playWallet += amount; updateWalletUI(); addHistory(`🔄 Transferred ${amount} ETB from Main → Play`); } });
+        
+        // Original game buttons
+        document.getElementById('depositBtn')?.addEventListener('click', openDepositTypeModal);
+        document.getElementById('withdrawBtn')?.addEventListener('click', openWithdrawTypeModal);
+        document.getElementById('randomCardBtn')?.addEventListener('click', () => { if(!isGameActive && socket) { if (playWallet < 10) alert("Insufficient Play Wallet balance!"); else socket.emit('newCardNumber'); } });
+        document.getElementById('bingoBtn')?.addEventListener('click', () => { if(socket && isGameActive) socket.emit('claimBingo'); });
+        document.querySelectorAll('#depositTypeModal .type-btn[data-type]').forEach(btn => btn.addEventListener('click',()=>openDepositDetailsModal(btn.dataset.type)));
+        document.getElementById('closeDepositTypeBtn')?.addEventListener('click',closeDepositTypeModal);
+        document.getElementById('backDepositBtn')?.addEventListener('click',()=>{ document.getElementById('depositDetailsModal').classList.remove('active'); openDepositTypeModal(); });
+        document.getElementById('submitDepositBtn')?.addEventListener('click',submitDepositWithProof);
+        document.querySelectorAll('#withdrawTypeModal .type-btn[data-type]').forEach(btn => btn.addEventListener('click',()=>openWithdrawDetailsModal(btn.dataset.type)));
+        document.getElementById('closeWithdrawTypeBtn')?.addEventListener('click',()=>document.getElementById('withdrawTypeModal').classList.remove('active'));
+        document.getElementById('backWithdrawBtn')?.addEventListener('click',()=>{ document.getElementById('withdrawDetailsModal').classList.remove('active'); openWithdrawTypeModal(); });
+        document.getElementById('submitWithdrawBtn')?.addEventListener('click',submitWithdrawRequest);
+        document.getElementById('rulesBtn')?.addEventListener('click',()=>document.getElementById('rulesModal').classList.add('active'));
+        document.getElementById('rulesBtnGame')?.addEventListener('click',()=>document.getElementById('rulesModal').classList.add('active'));
+        document.getElementById('closeRulesBtn')?.addEventListener('click',()=>document.getElementById('rulesModal').classList.remove('active'));
+        
+        loadDepositAccounts();
+        buildNumberGrid();
+        updateWalletUI();
+        connect();
+        showPage('stake');
+    </script>
 </body>
 </html>
